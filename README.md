@@ -63,7 +63,7 @@ bash
 Copy
 Edit
 ollama run codellama
-This serves the model locally at http://localhost:11434 by default.
+This serves the model locally at http://127.0.0.1:11434 by default.
 
 🧪 Using DevTool
 Once CodeLlama is running, you can use the tool like this:
@@ -90,9 +90,8 @@ Model not found: Use ollama pull codellama to ensure the model is downloaded.
 Permissions: Use chmod +x if you face script permission issues on macOS/Linux.
 
 🧩 Roadmap
- Add VS Code extension integration
-
- Support for Java and Swift
+ Add Android Studio extension integration
+ Further Support for any programming language/IDE
 
  GUI Tool
 
