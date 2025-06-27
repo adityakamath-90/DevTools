@@ -21,7 +21,8 @@ def generate_kdoc_for_file(file_content: str) -> str:
         response = requests.post(OLLAMA_API_URL, json={
             "model": MODEL_NAME,
             "prompt": prompt,
-            "stream": False
+            "stream": False,
+            "temperature": 0
         })
         response.raise_for_status()
     except Exception as e:
