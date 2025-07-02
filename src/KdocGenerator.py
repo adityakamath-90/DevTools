@@ -55,5 +55,5 @@ def update_kdocs_in_directory(directory):
                 update_kdocs_in_file(os.path.join(root, file))
 
 if __name__ == "__main__":
-    project_dir = ""  # Your Kotlin source folder path
+    project_dir = "src"  # Your Kotlin source folder path
     update_kdocs_in_directory(project_dir)
