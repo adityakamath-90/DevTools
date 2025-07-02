@@ -1,8 +1,9 @@
 import os
 import requests
 
-OLLAMA_API_URL = "http://127.0.0.1:11434/api/generate"
-MODEL_NAME = "codellama:instruct"
+# Use environment variables with fallbacks for Docker compatibility
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://127.0.0.1:11434/api/generate")
+MODEL_NAME = os.getenv("MODEL_NAME", "codellama:instruct")
 
 def generate_kdoc_for_file(file_content: str) -> str:
     prompt = (
