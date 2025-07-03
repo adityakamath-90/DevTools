@@ -172,3 +172,12 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# DevTools specific
+input/
+output/
+data/
+*.tar.gz
+*.zip
+models/
+.ollama/
