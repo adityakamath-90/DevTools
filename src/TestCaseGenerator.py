@@ -1,10 +1,19 @@
 import os
 import re
+import sys
 from typing import Optional
 
 from PromptBuilder import PromptBuilder
-from EmbeddingIndexer import EmbeddingIndexer
 from LLMClient import LLMClient
+
+# Try to import the complex EmbeddingIndexer, fallback to simple one
+try:
+    from EmbeddingIndexer import EmbeddingIndexer
+    print("[INFO] Using advanced EmbeddingIndexer")
+except ImportError as e:
+    print(f"[WARN] Could not import EmbeddingIndexer: {e}")
+    print("[INFO] Falling back to SimpleEmbeddingIndexer")
+    from SimpleEmbeddingIndexer import SimpleEmbeddingIndexer as EmbeddingIndexer
 
 OLLAMA_API_URL = "http://127.0.0.1:11434/api/generate"
 MODEL_NAME = "codellama:instruct"
@@ -59,8 +68,13 @@ class KotlinTestGenerator:
 
     def process_file(self, filepath: str):
         print(f"[INFO] Processing file: {filepath}")
-        with open(filepath, "r", encoding="utf-8") as f:
-            file_content = f.read()
+        
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                file_content = f.read()
+        except Exception as e:
+            print(f"[ERROR] Failed to read file {filepath}: {e}")
+            return
 
         class_name = self.extract_class_name(file_content)
         if not class_name:
@@ -68,14 +82,18 @@ class KotlinTestGenerator:
             return
 
         # Retrieve similar tests
-        similar_tests = self.indexer.retrieve_similar(file_content)
+        try:
+            similar_tests = self.indexer.retrieve_similar(file_content)
+        except Exception as e:
+            print(f"[WARN] Failed to retrieve similar tests: {e}")
+            similar_tests = []
 
         # Build generation prompt
         gen_prompt = PromptBuilder.build_generation_prompt(class_name, file_content, similar_tests)
         generated_test = self.llm_client.generate(gen_prompt)
 
         if not generated_test:
-            print(f"[ERROR] Failed to generate output-test for {class_name}")
+            print(f"[ERROR] Failed to generate test for {class_name}")
             return
 
         # Build accuracy check prompt
@@ -86,16 +104,24 @@ class KotlinTestGenerator:
         clean_test_code = self.clean_generated_code(generated_test)
         clean_feedback = self.clean_generated_code(feedback)
 
-        # Save generated output-test code
+        # Save generated test code
         filename = os.path.basename(filepath)
         base_name = filename.replace(".kt", "")
         test_filename = f"{class_name}Test.kt"
         test_path = os.path.join(self.test_dir, test_filename)
 
-        with open(test_path, "w", encoding="utf-8") as f:
-            f.write(clean_test_code)
+        try:
+            # Ensure the test directory exists
+            os.makedirs(os.path.dirname(test_path), exist_ok=True)
+            
+            with open(test_path, "w", encoding="utf-8") as f:
+                f.write(clean_test_code)
+            print(f"[✅] Generated test: {test_path}")
+            print(f"[📁] File saved to: {os.path.abspath(test_path)}")
+        except Exception as e:
+            print(f"[ERROR] Failed to write test file {test_path}: {e}")
+            return
 
-        print(f"[✅] Generated output-test: {test_path}")
         print(f"[🔍] Accuracy & Reliability feedback:\n{clean_feedback}\n")
 
     def generate_tests_for_all(self):
@@ -110,12 +136,46 @@ class KotlinTestGenerator:
 
 # === Main execution ===
 if __name__ == "__main__":
-    import sys
-
+    print("[INFO] Starting TestCaseGenerator...")
+    
     source_dir = sys.argv[1] if len(sys.argv) > 1 else ("src/input-src" if os.path.exists("src/input-src") else ".")
-    test_dir = "src/output-test"
+    test_dir = "src/output-test" 
     existing_tests_dir = "src/testcase--datastore"
-    llm_client = LLMClient(api_url=OLLAMA_API_URL, model_name=MODEL_NAME)
-    indexer = EmbeddingIndexer(test_dir=existing_tests_dir)
-    generator = KotlinTestGenerator(source_dir=source_dir, test_dir=test_dir, llm_client=llm_client, indexer=indexer)
-    generator.generate_tests_for_all()
+    
+    print(f"[INFO] Source directory: {source_dir}")
+    print(f"[INFO] Test output directory: {test_dir}")
+    print(f"[INFO] Existing tests directory: {existing_tests_dir}")
+    
+    # Check if source directory exists
+    if not os.path.exists(source_dir):
+        print(f"[ERROR] Source directory {source_dir} does not exist")
+        sys.exit(1)
+    
+    # Check if existing tests directory exists
+    if not os.path.exists(existing_tests_dir):
+        print(f"[WARN] Existing tests directory {existing_tests_dir} does not exist")
+        print("[INFO] Creating empty existing tests directory...")
+        os.makedirs(existing_tests_dir, exist_ok=True)
+    
+    try:
+        print("[INFO] Initializing LLMClient...")
+        llm_client = LLMClient(api_url=OLLAMA_API_URL, model_name=MODEL_NAME)
+        
+        print("[INFO] Initializing EmbeddingIndexer...")
+        indexer = EmbeddingIndexer(test_dir=existing_tests_dir)
+        
+        print("[INFO] Initializing KotlinTestGenerator...")
+        generator = KotlinTestGenerator(source_dir=source_dir, test_dir=test_dir, llm_client=llm_client, indexer=indexer)
+        
+        print("[INFO] Starting test generation...")
+        generator.generate_tests_for_all()
+        
+        print("[INFO] Test generation completed!")
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to initialize components: {e}")
+        print("Make sure all required dependencies are installed:")
+        print("  pip install -r requirements.txt")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
