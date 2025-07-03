@@ -10,23 +10,35 @@ This system combines:
 - **⚡ Fast Processing**: FAISS indexing for efficient similarity search
 - **✨ Clean Output**: Markdown-free, production-ready test code
 - **📚 Documentation Generation**: Automatic KDoc comment generation for Kotlin code
+- **🏗️ Modular Architecture**: Interface-driven design with robust configuration and logging
 
 ## 🏗️ System Architecture
 
-### Core Components
+### New Modular Architecture (v2.0)
 
-1. **TestCaseGenerator**: Main orchestrator that processes Kotlin files and generates tests
-2. **EmbeddingIndexer**: Uses Microsoft CodeBERT model for semantic similarity matching
-3. **LLMClient**: Interface to Ollama/CodeLlama for test generation
-4. **PromptBuilder**: Context-aware prompt construction for better test quality
-5. **KdocGenerator**: Automatic KDoc comment generation for Kotlin classes
+The system has been completely redesigned with a modular, production-ready architecture:
+
+#### Core Modules
+- **`src/core/`**: Core business logic (test generation, code parsing, prompt building)
+- **`src/services/`**: Service layer (LLM, embedding, KDoc services)
+- **`src/interfaces/`**: Abstract base classes and interfaces
+- **`src/models/`**: Data models and result objects
+- **`src/config/`**: Configuration management with environment overrides
+- **`src/utils/`**: Utilities (logging, helpers)
+
+#### Key Components
+1. **KotlinTestGenerator** (core): Main orchestrator with enhanced error handling
+2. **EmbeddingIndexerService** (services): Semantic similarity with fallback mechanisms
+3. **LLMService** (services): Interface to Ollama/CodeLlama with robust error handling
+4. **PromptBuilderService** (core): Context-aware prompt construction
+5. **KDocService** (services): Automatic KDoc comment generation
 
 ### Data Flow
 
 ```
-Kotlin Source Files → Class Detection → Similarity Search → LLM Generation → Test Files
-                                    ↓
-                            Existing Test Database (FAISS Index)
+Kotlin Source Files → Core Parser → Service Layer → LLM Generation → Test Files
+                                        ↓
+                            Embedding Service (FAISS Index + Fallback)
 ```
 
 ## 🚀 Quick Start
@@ -64,22 +76,53 @@ Kotlin Source Files → Class Detection → Similarity Search → LLM Generation
 
 ### Usage
 
-#### Generate Test Cases
+#### New Modular CLI (Recommended)
 
 ```bash
 # Generate tests for all Kotlin files in src/input-src/
-python src/TestCaseGenerator.py
+python main.py generate-tests
 
 # Generate tests for a specific directory
-python src/TestCaseGenerator.py path/to/your/kotlin/files
+python main.py generate-tests --source-dir path/to/kotlin/files
+
+# Generate KDoc comments
+python main.py generate-kdoc
+
+# Generate both tests and KDoc
+python main.py generate-all
+
+# Health check
+python main.py health-check
 ```
 
-#### Generate KDoc Comments
+#### Legacy Compatibility
+
+For backward compatibility, the legacy scripts still work:
 
 ```bash
-# Add KDoc comments to Kotlin files
-python src/KdocGenerator.py
+# Generate tests (legacy)
+python TestCaseGenerator.py
+
+# Generate KDoc (legacy)  
+python KdocGenerator.py
 ```
+
+### Configuration
+
+The system supports flexible configuration through:
+
+1. **Environment variables**:
+   ```bash
+   export OLLAMA_API_URL="http://127.0.0.1:11434/api/generate"
+   export MODEL_NAME="codellama:instruct"
+   export EMBEDDING_MODEL="microsoft/codebert-base"
+   export SOURCE_DIR="src/input-src"
+   export TEST_DIR="output-test"
+   ```
+
+2. **Configuration files**: Automatically loaded from `src/config/settings.py`
+
+3. **Command-line arguments**: Override any configuration option
 
 ### Output
 
@@ -92,6 +135,7 @@ python src/KdocGenerator.py
 
 ### ✅ Current Capabilities
 
+- **Modular Architecture**: Interface-driven design with dependency injection
 - **Advanced Class Detection**: Smart regex patterns with comment filtering
 - **Semantic Similarity**: Microsoft CodeBERT embeddings for context matching
 - **Test Generation**: Comprehensive JUnit 5 test creation
@@ -99,14 +143,76 @@ python src/KdocGenerator.py
 - **Batch Processing**: Process entire directories of Kotlin files
 - **Fallback Support**: Simple indexer when advanced features unavailable
 - **Documentation**: Automatic KDoc comment generation
+- **Robust Configuration**: Environment-based settings with overrides
+- **Structured Logging**: Comprehensive logging system with different levels
+- **Error Handling**: Graceful degradation and recovery mechanisms
 
 ### 🔧 Technical Stack
 
+- **Architecture**: Modular service-oriented design
 - **AI Model**: CodeLlama (via Ollama)
 - **Embeddings**: Microsoft CodeBERT
 - **Vector Search**: FAISS
+- **Configuration**: Dataclass-based with environment overrides
+- **Logging**: Structured logging with configurable levels
 - **Language**: Python 3.9+
 - **Target**: Kotlin with JUnit 5
+
+## 📁 Project Structure
+
+```
+DevTools/
+├── main.py                  # New unified CLI entry point
+├── TestCaseGenerator.py     # Legacy test generation (backward compatibility)
+├── KdocGenerator.py         # Legacy KDoc generation (backward compatibility)
+├── requirements.txt         # Python dependencies
+├── src/
+│   ├── config/             # Configuration management
+│   │   ├── __init__.py
+│   │   └── settings.py     # Environment-based configuration
+│   ├── core/               # Core business logic
+│   │   ├── __init__.py
+│   │   ├── code_parser.py  # Kotlin code parsing
+│   │   ├── prompt_builder.py # Context-aware prompt construction
+│   │   └── test_generator.py # Test generation orchestrator
+│   ├── services/           # Service layer
+│   │   ├── __init__.py
+│   │   ├── llm_service.py  # LLM interface with error handling
+│   │   ├── embedding_service.py # Semantic similarity service
+│   │   └── kdoc_service.py # KDoc generation service
+│   ├── interfaces/         # Abstract base classes
+│   │   ├── __init__.py
+│   │   └── base_interfaces.py
+│   ├── models/             # Data models
+│   │   ├── __init__.py
+│   │   └── data_models.py  # Result objects and data structures
+│   ├── utils/              # Utilities
+│   │   ├── __init__.py
+│   │   └── logging.py      # Structured logging
+│   └── input-src/          # Input Kotlin source files
+│       ├── Calculator.kt   # Sample calculator class
+│       └── UserManager.kt  # Sample user management class
+├── output-test/            # Generated test files (created automatically)
+├── docs/                   # Comprehensive documentation
+│   ├── ARCHITECTURE.md     # System architecture
+│   ├── API.md             # API documentation
+│   ├── DIAGRAMS.md        # Visual diagrams
+│   └── MIGRATION.md       # Migration guide
+└── README.md              # This file
+```
+
+## 🔄 Migration Guide
+
+### From Legacy to Modular Architecture
+
+If you're upgrading from the legacy version:
+
+1. **No immediate changes required** - Legacy scripts (`TestCaseGenerator.py`, `KdocGenerator.py`) still work
+2. **Recommended**: Switch to the new CLI (`python main.py`) for better features
+3. **Configuration**: Move environment variables to the new format (see Configuration section)
+4. **Custom integrations**: Use the new service-based API (see `docs/API.md`)
+
+For detailed migration instructions, see [MIGRATION.md](./MIGRATION.md).
 
 ## 📁 Project Structure
 
@@ -203,27 +309,39 @@ class CalculatorTest {
 
 ### Test with Sample Files
 
-1. **Run test generation**:
+1. **Health check** (verify all services are working):
    ```bash
-   python src/TestCaseGenerator.py
+   python main.py health-check
    ```
 
-2. **Check generated tests**:
+2. **Run test generation** (new CLI):
+   ```bash
+   python main.py generate-tests
+   ```
+
+3. **Check generated tests**:
    ```bash
    ls -la output-test/
    cat output-test/CalculatorTest.kt
    ```
 
-3. **Generate documentation**:
+4. **Generate documentation**:
    ```bash
-   python src/KdocGenerator.py
+   python main.py generate-kdoc
+   ```
+
+5. **Legacy compatibility test**:
+   ```bash
+   python TestCaseGenerator.py
+   python KdocGenerator.py
    ```
 
 ### Expected Output
 
 - Test files in `output-test/` directory
-- Console logs showing processing progress
+- Structured console logs showing processing progress
 - Error handling for missing dependencies
+- Automatic fallback to simple indexer when needed
 
 ## 🛠️ Advanced Features
 
@@ -269,13 +387,33 @@ The system uses Microsoft CodeBERT to find similar test patterns:
 2. **"Ollama not responding"**: Ensure Ollama server is running with `ollama serve`
 3. **"Model not found"**: Download CodeLlama with `ollama pull codellama:instruct`
 4. **"Empty output"**: Check if input Kotlin files exist in `src/input-src/`
+5. **"Configuration errors"**: Run `python main.py health-check` to verify setup
 
 ### Debug Mode
 
 Enable verbose logging by setting:
 ```bash
 export DEBUG=1
-python src/TestCaseGenerator.py
+python main.py generate-tests
+```
+
+Or use the built-in logging configuration:
+```bash
+python main.py generate-tests --log-level DEBUG
+```
+
+### Service Status
+
+Check individual service status:
+```bash
+# Health check with detailed output
+python main.py health-check
+
+# Test LLM service
+python main.py test-llm
+
+# Test embedding service
+python main.py test-embedding
 ```
 
 ## 🤝 Contributing
@@ -287,10 +425,35 @@ python src/TestCaseGenerator.py
    ```bash
    pip install -r requirements.txt
    ```
-3. **Run tests**:
+3. **Set up environment**:
    ```bash
-   python -m pytest tests/  # If tests exist
+   export OLLAMA_API_URL="http://127.0.0.1:11434/api/generate"
+   export MODEL_NAME="codellama:instruct"
    ```
+4. **Run health check**:
+   ```bash
+   python main.py health-check
+   ```
+5. **Run tests**:
+   ```bash
+   python main.py generate-tests
+   ```
+
+### Development Guidelines
+
+- **Use the modular architecture**: Add new features through the service layer
+- **Follow interfaces**: Implement abstract base classes for consistency
+- **Add logging**: Use the structured logging system (`src/utils/logging.py`)
+- **Configuration**: Add new settings to `src/config/settings.py`
+- **Error handling**: Implement graceful degradation and fallback mechanisms
+
+### Adding New Features
+
+1. **Services**: Add new services to `src/services/`
+2. **Core logic**: Add business logic to `src/core/`
+3. **Models**: Add data models to `src/models/`
+4. **Configuration**: Update `src/config/settings.py`
+5. **CLI**: Add new commands to `main.py`
 
 ## 📄 License
 
@@ -312,16 +475,22 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🚀 Next Steps
 
-1. **Run the system** with your Kotlin files
+1. **Run the system** with the new CLI:
+   ```bash
+   python main.py health-check
+   python main.py generate-tests
+   ```
 2. **Examine generated tests** in `output-test/`
-3. **Customize prompts** in `PromptBuilder.py` for your needs
-4. **Add more test examples** to improve context matching
-5. **Explore documentation** in `docs/` for advanced features
+3. **Explore the modular architecture** in `src/`
+4. **Customize configuration** in `src/config/settings.py`
+5. **Add more test examples** to `src/testcase--datastore/` for improved context
+6. **Explore documentation** in `docs/` for advanced features
+7. **Try the legacy compatibility** with `TestCaseGenerator.py` and `KdocGenerator.py`
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: July 3, 2025  
+**Version**: 2.0 (Modular Architecture)  
+**Last Updated**: July 2025  
 **Maintained By**: Development Team  
 
 For questions or issues, please check the troubleshooting section or review the detailed documentation in the `docs/` directory.

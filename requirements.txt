@@ -1,6 +1,23 @@
+# Core AI/ML dependencies
 sentence-transformers==2.2.2
 huggingface-hub==0.16.4
 transformers==4.31.0
 faiss-cpu==1.7.4
 numpy==1.24.3
+
+# HTTP and API communication
 requests==2.31.0
+
+# Data processing and utilities
+torch>=1.13.0
+tokenizers>=0.13.0
+
+# Optional dependencies for enhanced functionality
+# Uncomment if you need GPU support:
+# faiss-gpu==1.7.4
+# torch[cuda]>=1.13.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=5.0.0

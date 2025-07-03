@@ -1,26 +1,46 @@
-# AI-Powered Kotlin Test Generation System - Visual Diagrams
+# AI-Powered Kotlin Test Generation System v2.0 - Visual Diagrams
 
-This document contains Mermaid diagrams representing the system architecture, component interactions, and data flow for the AI-powered Kotlin test generation system.
+This document contains Mermaid diagrams representing the new modular system architecture, component interactions, and data flow for the AI-powered Kotlin test generation system v2.0.
 
-## System Architecture Overview
+## New Modular System Architecture Overview
 
 ```mermaid
 graph TB
-    subgraph "Input Layer"
-        KT[Kotlin Source Files<br/>src/input-src/]
-        CONFIG[Configuration<br/>Environment Variables]
+    subgraph "CLI Layer"
+        MAIN[main.py<br/>Unified CLI Interface]
+        LEGACY1[TestCaseGenerator.py<br/>Legacy Wrapper]
+        LEGACY2[KdocGenerator.py<br/>Legacy Wrapper]
     end
 
-    subgraph "Application Layer"
-        KDOCGEN[KDoc Generator<br/>KdocGenerator.py]
-        TESTGEN[Test Case Generator<br/>TestCaseGenerator.py]
+    subgraph "Configuration Layer"
+        CONFIG[Configuration Management<br/>src/config/settings.py]
+        GENCONFIG[GenerationConfig<br/>Environment Overrides]
+        LLMCONFIG[LLMConfig<br/>API Settings]
+        EMBEDCONFIG[EmbeddingConfig<br/>Model Settings]
     end
 
-    subgraph "Core Services"
-        LLM[LLM Client<br/>LLMClient.py]
-        EMBED[Embedding Indexer<br/>EmbeddingIndexer.py]
-        SIMPLE[Simple Embedding Indexer<br/>SimpleEmbeddingIndexer.py]
-        PROMPT[Prompt Builder<br/>PromptBuilder.py]
+    subgraph "Core Business Logic"
+        TESTGEN[Test Generator<br/>src/core/test_generator.py]
+        PARSER[Code Parser<br/>src/core/code_parser.py]
+        PROMPTBUILDER[Prompt Builder<br/>src/core/prompt_builder.py]
+    end
+
+    subgraph "Service Layer"
+        LLMSERVICE[LLM Service<br/>src/services/llm_service.py]
+        EMBEDSERVICE[Embedding Service<br/>src/services/embedding_service.py]
+        SIMPLESERVICE[Simple Embedding Service<br/>src/services/embedding_service.py]
+        KDOCSERVICE[KDoc Service<br/>src/services/kdoc_service.py]
+    end
+
+    subgraph "Interface & Model Layer"
+        INTERFACES[Base Interfaces<br/>src/interfaces/base_interfaces.py]
+        MODELS[Data Models<br/>src/models/data_models.py]
+        RESULTS[Result Objects<br/>TestGenerationResult, KDocResult]
+    end
+
+    subgraph "Utility Layer"
+        LOGGING[Structured Logging<br/>src/utils/logging.py]
+        HELPERS[Helper Functions<br/>Error Handling, File I/O]
     end
 
     subgraph "External Services"
@@ -29,75 +49,240 @@ graph TB
         FAISS[FAISS Vector Index<br/>Similarity Search]
     end
 
-    subgraph "Output Layer"
-        KDOCOUT[Enhanced Kotlin Files<br/>with KDoc Comments]
-        TESTOUT[JUnit 5 Test Files<br/>output-test/]
-        DATASTORE[Test Reference Database<br/>src/testcase--datastore/]
+    subgraph "Input/Output"
+        INPUT[Kotlin Source Files<br/>src/input-src/]
+        OUTPUT[Generated Tests<br/>output-test/]
+        DATASTORE[Test Reference DB<br/>src/testcase--datastore/]
     end
 
-    %% Input connections
-    KT --> KDOCGEN
-    KT --> TESTGEN
-    CONFIG --> LLM
+    %% CLI to Configuration
+    MAIN --> CONFIG
+    LEGACY1 --> CONFIG
+    LEGACY2 --> CONFIG
 
-    %% Application to Services
-    KDOCGEN --> LLM
-    KDOCGEN --> PROMPT
-    TESTGEN --> LLM
-    TESTGEN --> EMBED
-    TESTGEN --> SIMPLE
-    TESTGEN --> PROMPT
+    %% Configuration to Services
+    CONFIG --> LLMSERVICE
+    CONFIG --> EMBEDSERVICE
+    CONFIG --> KDOCSERVICE
 
-    %% Services to External (with fallback)
-    LLM --> OLLAMA
-    EMBED -.-> CODEBERT
-    EMBED -.-> FAISS
-    SIMPLE --> DATASTORE
+    %% CLI to Core
+    MAIN --> TESTGEN
+    MAIN --> KDOCSERVICE
+    LEGACY1 --> TESTGEN
+    LEGACY2 --> KDOCSERVICE
 
-    %% Cross-service communication
-    EMBED --> PROMPT
-    SIMPLE --> PROMPT
-    PROMPT --> LLM
+    %% Core to Services
+    TESTGEN --> LLMSERVICE
+    TESTGEN --> EMBEDSERVICE
+    TESTGEN --> PARSER
+    TESTGEN --> PROMPTBUILDER
+    KDOCSERVICE --> LLMSERVICE
+    KDOCSERVICE --> PROMPTBUILDER
 
-    %% Output connections
-    KDOCGEN --> KDOCOUT
-    TESTGEN --> TESTOUT
-    EMBED --> DATASTORE
-    SIMPLE --> DATASTORE
+    %% Services to External
+    LLMSERVICE --> OLLAMA
+    EMBEDSERVICE -.-> CODEBERT
+    EMBEDSERVICE -.-> FAISS
+    SIMPLESERVICE --> DATASTORE
+
+    %% Core to Interfaces/Models
+    TESTGEN --> INTERFACES
+    TESTGEN --> MODELS
+    KDOCSERVICE --> INTERFACES
+    KDOCSERVICE --> MODELS
+
+    %% All layers to Utilities
+    TESTGEN --> LOGGING
+    LLMSERVICE --> LOGGING
+    EMBEDSERVICE --> LOGGING
+    KDOCSERVICE --> LOGGING
+
+    %% Input/Output connections
+    INPUT --> PARSER
+    TESTGEN --> OUTPUT
+    EMBEDSERVICE --> DATASTORE
+    SIMPLESERVICE --> DATASTORE
 
     %% Styling
-    classDef inputStyle fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff
-    classDef appStyle fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
-    classDef serviceStyle fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#fff
-    classDef externalStyle fill:#f39c12,stroke:#e67e22,stroke-width:2px,color:#fff
-    classDef outputStyle fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
+    classDef cliStyle fill:#3498db,stroke:#2980b9,stroke-width:2px,color:#fff
+    classDef configStyle fill:#9b59b6,stroke:#8e44ad,stroke-width:2px,color:#fff
+    classDef coreStyle fill:#e74c3c,stroke:#c0392b,stroke-width:2px,color:#fff
+    classDef serviceStyle fill:#f39c12,stroke:#e67e22,stroke-width:2px,color:#fff
+    classDef interfaceStyle fill:#1abc9c,stroke:#16a085,stroke-width:2px,color:#fff
+    classDef utilStyle fill:#95a5a6,stroke:#7f8c8d,stroke-width:2px,color:#fff
+    classDef externalStyle fill:#e67e22,stroke:#d35400,stroke-width:2px,color:#fff
+    classDef ioStyle fill:#2ecc71,stroke:#27ae60,stroke-width:2px,color:#fff
 
-    class KT,CONFIG inputStyle
-    class KDOCGEN,TESTGEN appStyle
-    class LLM,EMBED,SIMPLE,PROMPT serviceStyle
+    class MAIN,LEGACY1,LEGACY2 cliStyle
+    class CONFIG,GENCONFIG,LLMCONFIG,EMBEDCONFIG configStyle
+    class TESTGEN,PARSER,PROMPTBUILDER coreStyle
+    class LLMSERVICE,EMBEDSERVICE,SIMPLESERVICE,KDOCSERVICE serviceStyle
+    class INTERFACES,MODELS,RESULTS interfaceStyle
+    class LOGGING,HELPERS utilStyle
     class OLLAMA,CODEBERT,FAISS externalStyle
-    class KDOCOUT,TESTOUT,DATASTORE outputStyle
+    class INPUT,OUTPUT,DATASTORE ioStyle
 ```
 
-## Component Class Diagram
+## Modular Component Class Diagram
 
 ```mermaid
 classDiagram
-    class LLMClient {
-        -api_url: str
-        -model_name: str
-        +__init__(api_url, model_name)
-        +generate(prompt: str) str
+    %% Configuration Layer
+    class GenerationConfig {
+        +source_dir: str
+        +test_dir: str
+        +log_level: str
+        +from_env() GenerationConfig
+        +override_from_env() GenerationConfig
     }
 
-    class EmbeddingIndexer {
-        -test_dir: str
+    class LLMConfig {
+        +api_url: str
+        +model_name: str
+        +timeout: int
+        +max_retries: int
+        +temperature: float
+    }
+
+    %% Interface Layer
+    class BaseEmbeddingIndexer {
+        <<abstract>>
+        +index_files(patterns: List[str]) None
+        +find_similar_content(query: str, top_k: int) List[str]
+        +health_check() bool
+    }
+
+    class BaseLLMClient {
+        <<abstract>>
+        +generate_code(prompt: str) str
+        +health_check() bool
+    }
+
+    %% Service Layer
+    class LLMService {
+        -config: LLMConfig
+        -logger: Logger
+        +__init__(config: LLMConfig)
+        +generate_code(prompt: str) str
+        +health_check() bool
+        +get_model_info() dict
+    }
+
+    class EmbeddingIndexerService {
+        -config: EmbeddingConfig
         -tokenizer: AutoTokenizer
         -model: AutoModel
-        -test_cases: List~str~
-        -embeddings: torch.Tensor
         -index: faiss.IndexFlatL2
-        -dimension: int
+        +__init__(config: EmbeddingConfig)
+        +index_files(patterns: List[str]) None
+        +find_similar_content(query: str, top_k: int) List[str]
+        +health_check() bool
+    }
+
+    class SimpleEmbeddingIndexerService {
+        -config: EmbeddingConfig
+        -test_cases: List[str]
+        +__init__(config: EmbeddingConfig)
+        +index_files(patterns: List[str]) None
+        +find_similar_content(query: str, top_k: int) List[str]
+        +health_check() bool
+    }
+
+    class KDocService {
+        -llm_service: LLMService
+        -config: GenerationConfig
+        -logger: Logger
+        +__init__(llm_service: LLMService, config: GenerationConfig)
+        +generate_kdoc(kotlin_code: str) str
+        +process_file(file_path: str) KDocResult
+        +process_directory(directory_path: str) List[KDocResult]
+    }
+
+    %% Core Layer
+    class KotlinTestGenerator {
+        -config: GenerationConfig
+        -llm_service: LLMService
+        -embedding_service: BaseEmbeddingIndexer
+        -logger: Logger
+        +__init__(config, llm_service, embedding_service)
+        +extract_class_name(code: str) Optional[str]
+        +clean_generated_code(code: str) str
+        +process_file(filepath: str) TestGenerationResult
+        +generate_tests_for_all() List[TestGenerationResult]
+    }
+
+    class CodeParser {
+        -config: GenerationConfig
+        +__init__(config: GenerationConfig)
+        +parse_kotlin_file(file_path: str) ParsedKotlinFile
+        +extract_classes(code: str) List[KotlinClass]
+        +remove_comments(code: str) str
+    }
+
+    class PromptBuilder {
+        -config: GenerationConfig
+        +__init__(config: GenerationConfig)
+        +build_test_prompt(class_code: str, similar_tests: List[str]) str
+        +build_kdoc_prompt(kotlin_code: str) str
+    }
+
+    %% Data Models
+    class TestGenerationResult {
+        +success: bool
+        +input_file: str
+        +output_file: str
+        +class_name: Optional[str]
+        +generated_code: Optional[str]
+        +error_message: Optional[str]
+        +processing_time: Optional[float]
+        +similar_tests_found: int
+    }
+
+    class KDocResult {
+        +success: bool
+        +file_path: str
+        +classes_processed: int
+        +functions_processed: int
+        +error_message: Optional[str]
+        +generated_kdoc: Optional[str]
+    }
+
+    %% Main Application
+    class GenAIApplication {
+        -config: GenerationConfig
+        -llm_service: LLMService
+        -embedding_service: BaseEmbeddingIndexer
+        -kdoc_service: KDocService
+        -test_generator: KotlinTestGenerator
+        +__init__(config: Optional[GenerationConfig])
+        +health_check() bool
+        +generate_tests(source_dir: str) List[TestGenerationResult]
+        +generate_kdoc(source_dir: str) List[KDocResult]
+        +generate_all(source_dir: str) dict
+    }
+
+    %% Relationships
+    BaseLLMClient <|-- LLMService
+    BaseEmbeddingIndexer <|-- EmbeddingIndexerService
+    BaseEmbeddingIndexer <|-- SimpleEmbeddingIndexerService
+    
+    GenAIApplication --> GenerationConfig
+    GenAIApplication --> LLMService
+    GenAIApplication --> BaseEmbeddingIndexer
+    GenAIApplication --> KDocService
+    GenAIApplication --> KotlinTestGenerator
+    
+    KotlinTestGenerator --> LLMService
+    KotlinTestGenerator --> BaseEmbeddingIndexer
+    KotlinTestGenerator --> TestGenerationResult
+    
+    KDocService --> LLMService
+    KDocService --> KDocResult
+    
+    LLMService --> LLMConfig
+    EmbeddingIndexerService --> EmbeddingConfig
+    SimpleEmbeddingIndexerService --> EmbeddingConfig
+```
         +__init__(test_dir, embedding_model_name)
         +_load_and_index()
         +_encode(texts: List~str~) torch.Tensor
@@ -381,3 +566,149 @@ graph LR
 
 *Last Updated: July 3, 2025*  
 *These diagrams reflect the current implementation with Microsoft CodeBERT embedding support and fallback mechanisms.*
+
+## Modular Data Flow Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    participant CLI as CLI Interface
+    participant App as GenAIApplication
+    participant Config as Configuration
+    participant TestGen as KotlinTestGenerator
+    participant Parser as CodeParser
+    participant EmbedSvc as EmbeddingService
+    participant LLMSvc as LLMService
+    participant PromptBld as PromptBuilder
+    participant Logger as Logging System
+    participant FileIO as File System
+
+    Note over CLI, FileIO: Test Generation Flow (New Architecture)
+
+    CLI->>App: generate_tests(source_dir)
+    App->>Config: Load configuration with env overrides
+    Config-->>App: Return GenerationConfig
+    
+    App->>Logger: Log start of generation process
+    App->>TestGen: Initialize with services
+    
+    TestGen->>Parser: parse_kotlin_file(file_path)
+    Parser->>FileIO: Read Kotlin source file
+    FileIO-->>Parser: File content
+    Parser->>Parser: remove_comments(code)
+    Parser->>Parser: extract_classes(code)
+    Parser-->>TestGen: ParsedKotlinFile
+    
+    TestGen->>EmbedSvc: find_similar_content(class_name)
+    
+    alt Advanced Embedding Available
+        EmbedSvc->>EmbedSvc: Use CodeBERT + FAISS
+        EmbedSvc-->>TestGen: List of similar test patterns
+    else Fallback to Simple
+        EmbedSvc->>EmbedSvc: Use simple text matching
+        EmbedSvc-->>TestGen: List of similar test patterns
+    end
+    
+    TestGen->>PromptBld: build_test_prompt(class_code, similar_tests)
+    PromptBld-->>TestGen: Structured prompt with context
+    
+    TestGen->>LLMSvc: generate_code(prompt)
+    
+    alt LLM Service Available
+        LLMSvc->>LLMSvc: Call Ollama API
+        LLMSvc-->>TestGen: Generated test code
+    else LLM Service Unavailable
+        LLMSvc->>Logger: Log error and fallback
+        LLMSvc-->>TestGen: Error response
+    end
+    
+    TestGen->>TestGen: clean_generated_code(raw_code)
+    TestGen->>FileIO: Write test file to output directory
+    TestGen->>Logger: Log successful generation
+    
+    TestGen-->>App: TestGenerationResult with metadata
+    App->>Logger: Log completion
+    App-->>CLI: List[TestGenerationResult]
+```
+
+## Configuration and Health Check Flow
+
+```mermaid
+sequenceDiagram
+    participant CLI as CLI Interface
+    participant App as GenAIApplication
+    participant Config as Configuration
+    participant LLMSvc as LLMService
+    participant EmbedSvc as EmbeddingService
+    participant KDocSvc as KDocService
+    participant Logger as Logging System
+
+    Note over CLI, Logger: Health Check and Initialization Flow
+
+    CLI->>App: health_check()
+    App->>Config: Load environment configuration
+    Config->>Config: Validate and merge env variables
+    Config-->>App: Validated configuration
+    
+    App->>Logger: Initialize structured logging
+    
+    par Service Health Checks
+        App->>LLMSvc: health_check()
+        LLMSvc->>LLMSvc: Test Ollama connection
+        LLMSvc-->>App: Service status
+    and
+        App->>EmbedSvc: health_check()
+        EmbedSvc->>EmbedSvc: Test model loading
+        EmbedSvc-->>App: Service status
+    and
+        App->>KDocSvc: health_check()
+        KDocSvc->>KDocSvc: Validate dependencies
+        KDocSvc-->>App: Service status
+    end
+    
+    App->>Logger: Log health check results
+    App-->>CLI: Overall system health status
+```
+
+## Error Handling and Fallback Flow
+
+```mermaid
+flowchart TD
+    A[Request Received] --> B{Configuration Valid?}
+    B -->|No| C[Log Error & Return Config Error]
+    B -->|Yes| D[Initialize Services]
+    
+    D --> E{LLM Service Available?}
+    E -->|No| F[Log Warning & Continue with Fallback]
+    E -->|Yes| G[Proceed with LLM Generation]
+    
+    D --> H{Advanced Embedding Available?}
+    H -->|No| I[Use Simple Embedding Service]
+    H -->|Yes| J[Use CodeBERT Embedding Service]
+    
+    I --> K[Text-based Similarity Matching]
+    J --> L{CodeBERT Loading Successful?}
+    L -->|No| M[Fallback to Simple Service]
+    L -->|Yes| N[Semantic Similarity with FAISS]
+    
+    M --> K
+    N --> O[Context-aware Prompt Building]
+    K --> O
+    
+    F --> P[Generate Simple Template]
+    G --> Q{LLM Response Valid?}
+    Q -->|No| R[Log Error & Use Template]
+    Q -->|Yes| S[Process Generated Code]
+    
+    O --> G
+    P --> T[Return Result with Warnings]
+    R --> T
+    S --> U[Clean and Validate Code]
+    U --> V[Write Output Files]
+    V --> W[Return Success Result]
+    
+    style A fill:#3498db
+    style C fill:#e74c3c
+    style F fill:#f39c12
+    style T fill:#f39c12
+    style W fill:#2ecc71
+```
