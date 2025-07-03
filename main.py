@@ -222,7 +222,7 @@ def main():
     
     parser.add_argument(
         '--source-dir',
-        default='src/input-src',
+        default='input-src',
         help='Directory containing Kotlin source files'
     )
     
@@ -234,7 +234,7 @@ def main():
     
     parser.add_argument(
         '--existing-tests-dir',
-        default='src/testcase--datastore',
+        default='testcase-datastore',
         help='Directory containing existing test cases for context'
     )
     

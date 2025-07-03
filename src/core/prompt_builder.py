@@ -1,7 +1,18 @@
 """
-Intelligent prompt builder for AI-powered Kotlin test generation.
-
-This module provides sophisticated prompt construction capabilities for different
+Intelligent prompt builder for AI-powered Kotlin test generation        try:
+            context = self._build_context_string(similar_tests)
+            
+            template = self._templates['generation']
+            prompt = template.template.format(
+                class_name=kotlin_class.name,
+                class_code=kotlin_class.source_code,
+                context=context
+            )  template = self._templates['generation']
+            prompt = template.template.format(
+                class_name=kotlin_class.name,
+                class_code=kotlin_class.source_code,
+                context=context
+            )module provides sophisticated prompt construction capabilities for different
 types of code generation tasks, with template-based approach and context awareness.
 """
 
@@ -71,7 +82,7 @@ class PromptBuilder(IPromptBuilder):
             prompt = template.template.format(
                 class_name=kotlin_class.name,
                 class_code=kotlin_class.source_code,
-                similar_tests=context,
+                context=context,
                 methods_info=methods_info
             )
             

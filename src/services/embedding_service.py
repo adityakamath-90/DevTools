@@ -91,21 +91,55 @@ class EmbeddingIndexerService(SimilarityIndexer):
         try:
             self.logger.info(f"Loading embedding model: {self.config.model_name}")
 
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.config.model_name, local_files_only=True
-            )
-            self.model = AutoModel.from_pretrained(
-                self.config.model_name, local_files_only=True
-            )
+            # First try to load from local cache only
+            try:
+                self.tokenizer = AutoTokenizer.from_pretrained(
+                    self.config.model_name, 
+                    local_files_only=True,
+                    offline=True
+                )
+                self.model = AutoModel.from_pretrained(
+                    self.config.model_name, 
+                    local_files_only=True,
+                    offline=True
+                )
+                self.logger.info("Successfully loaded embedding model from local cache")
+            except Exception as local_error:
+                self.logger.warning(f"Failed to load model from local cache: {local_error}")
+                self.logger.info("Attempting to download model (this will require internet connection)")
+                
+                # Only download if specifically allowed
+                if os.getenv("ALLOW_MODEL_DOWNLOAD", "false").lower() not in ("true", "1", "yes"):
+                    raise ImportError(
+                        f"Model '{self.config.model_name}' not found locally and downloads are disabled. "
+                        f"Please download the model first or set ALLOW_MODEL_DOWNLOAD=true"
+                    )
+                
+                # Download model (requires internet)
+                self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name)
+                self.model = AutoModel.from_pretrained(self.config.model_name)
+                self.logger.info("Successfully downloaded and loaded embedding model")
 
             # Set model to evaluation mode
             self.model.eval()
             
-            self.logger.info("Successfully loaded embedding model")
-            
         except Exception as e:
             self.logger.error(f"Failed to load embedding model: {e}")
             raise
+    
+    def _validate_offline_mode(self) -> None:
+        """Validate that the system is configured for offline operation."""
+        # Check if downloads are explicitly disabled
+        allow_download = os.getenv("ALLOW_MODEL_DOWNLOAD", "false").lower()
+        if allow_download in ("true", "1", "yes"):
+            self.logger.warning("Model downloads are enabled - system may access internet")
+        
+        # Set offline environment variables
+        os.environ['TRANSFORMERS_OFFLINE'] = 'true'
+        os.environ['HF_DATASETS_OFFLINE'] = 'true'
+        os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+        
+        self.logger.info("Offline mode validation complete")
     
     def _load_and_index(self) -> IndexingResult:
         """Load test cases and build the search index."""
