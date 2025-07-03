@@ -5,25 +5,25 @@ from typing import List
 class PromptBuilder:
     @staticmethod
     def build_generation_prompt(class_name: str, class_code: str, similar_tests: List[str]) -> str:
-        context = "\n\n---\n\n".join(similar_tests) if similar_tests else "// No relevant test cases found in corpus."
+        context = "\n\n---\n\n".join(similar_tests) if similar_tests else "// No relevant output-test cases found in corpus."
         return (
             f"You are a senior Android Kotlin developer tasked with writing comprehensive unit tests for the following Kotlin class: `{class_name}`.\n\n"
             f"Class Code:\n{class_code}\n\n"
             f"You may refer to these similar existing unit tests for context:\n{context}\n\n"
             "Requirements:\n"
             "- Cover all public methods in the class.\n"
-            "- Include test cases for:\n"
+            "- Include output-test cases for:\n"
             "  • Typical usage scenarios\n"
             "  • Edge cases\n"
             "  • Error and exception handling\n"
-            "- Use idiomatic Kotlin test style with:\n"
+            "- Use idiomatic Kotlin output-test style with:\n"
             "  • JUnit 5 for structure\n"
             "  • MockK for mocking any dependencies\n"
             "- Use assertions such as assertEquals, assertTrue, assertFailsWith, etc.\n"
-            "- Write meaningful test function names that describe what each test is verifying.\n"
-            "- Return only pure Kotlin unit test code.\n"
-            "- Do NOT include comments, explanations, markdown, or annotations beyond necessary test-related syntax.\n"
-            "\nRespond ONLY with the Kotlin test source code."
+            "- Write meaningful output-test function names that describe what each output-test is verifying.\n"
+            "- Return only pure Kotlin unit output-test code.\n"
+            "- Do NOT include comments, explanations, markdown, or annotations beyond necessary output-test-related syntax.\n"
+            "\nRespond ONLY with the Kotlin output-test source code."
         )
 
     @staticmethod
@@ -37,6 +37,6 @@ class PromptBuilder:
             "2. Identify any missing tests, logical flaws, or testing anti-patterns.\n"
             "3. Improve or rewrite tests where necessary to ensure full, accurate coverage.\n"
             "4. Use JUnit 5 and MockK idiomatically in Kotlin.\n"
-            "\nOutput ONLY the corrected Kotlin unit test source code. Do NOT include explanations, comments, markdown, or any introductory text."
+            "\nOutput ONLY the corrected Kotlin unit output-test source code. Do NOT include explanations, comments, markdown, or any introductory text."
         )
 

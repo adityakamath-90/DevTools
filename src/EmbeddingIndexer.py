@@ -19,7 +19,7 @@ class EmbeddingIndexer:
         self._load_and_index()
 
     def _load_and_index(self):
-        print("[INFO] Loading test cases for indexing...")
+        print("[INFO] Loading output-test cases for indexing...")
         test_files = glob.glob(os.path.join(self.test_dir, "**/*.kt"), recursive=True)
 
         for file_path in test_files:
@@ -27,10 +27,10 @@ class EmbeddingIndexer:
                 self.test_cases.append(f.read())
 
         if not self.test_cases:
-            print(f"[WARN] No test cases found in: {self.test_dir}")
+            print(f"[WARN] No output-test cases found in: {self.test_dir}")
             return
 
-        print(f"[INFO] Loaded {len(self.test_cases)} test cases.")
+        print(f"[INFO] Loaded {len(self.test_cases)} output-test cases.")
         self.embeddings = self._encode(self.test_cases)
         self.dimension = self.embeddings.shape[1]
 
@@ -48,10 +48,10 @@ class EmbeddingIndexer:
             return embeddings
 
     def retrieve_similar(self, code: str, top_k: int = 3) -> List[str]:
-        print("[INFO] Retrieving similar test cases...")
+        print("[INFO] Retrieving similar output-test cases...")
 
         if not self.index:
-            print("[ERROR] FAISS index is not initialized.")
+            print("[INFO] No existing test cases found, proceeding without context.")
             return []
 
         query_embedding = self._encode([code])

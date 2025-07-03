@@ -2,7 +2,7 @@ import os
 import re
 from typing import Optional
 
-import PromptBuilder
+from PromptBuilder import PromptBuilder
 from EmbeddingIndexer import EmbeddingIndexer
 from LLMClient import LLMClient
 
@@ -19,9 +19,43 @@ class KotlinTestGenerator:
         os.makedirs(self.test_dir, exist_ok=True)
 
     def extract_class_name(self, code: str) -> Optional[str]:
-        pattern = re.compile(r"(class|object)\s+([A-Za-z0-9_]+)")
-        match = pattern.search(code)
-        return match.group(1) if match else None
+        # Remove comments to avoid false matches
+        code_without_comments = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+        code_without_comments = re.sub(r'//.*', '', code_without_comments)
+        
+        pattern = re.compile(r'^\s*(data\s+)?(class|object)\s+([A-Za-z0-9_]+)', re.MULTILINE)
+        matches = pattern.findall(code_without_comments)
+        if not matches:
+            return None
+        
+        # If there's only one class/object, return it
+        if len(matches) == 1:
+            return matches[0][2]  # Return the class name (third group)
+        
+        # If there are multiple classes, prefer non-data classes
+        for match in matches:
+            data_modifier, class_type, class_name = match
+            if not data_modifier:  # Not a data class
+                return class_name
+        
+        # If all are data classes, return the last one found
+        return matches[-1][2]
+    
+    def clean_generated_code(self, generated_code: str) -> str:
+        """Clean up the generated code by removing markdown formatting and extra text."""
+        # Remove markdown code blocks
+        code = generated_code.strip()
+        if code.startswith("```kotlin"):
+            code = code[9:]  # Remove ```kotlin
+        elif code.startswith("```"):
+            code = code[3:]   # Remove ```
+        if code.endswith("```"):
+            code = code[:-3]  # Remove closing ```
+        
+        # Remove any leading/trailing whitespace
+        code = code.strip()
+        
+        return code
 
     def process_file(self, filepath: str):
         print(f"[INFO] Processing file: {filepath}")
@@ -37,33 +71,38 @@ class KotlinTestGenerator:
         similar_tests = self.indexer.retrieve_similar(file_content)
 
         # Build generation prompt
-        gen_prompt = PromptBuilder.PromptBuilder.build_generation_prompt(class_name, file_content, similar_tests)
+        gen_prompt = PromptBuilder.build_generation_prompt(class_name, file_content, similar_tests)
         generated_test = self.llm_client.generate(gen_prompt)
 
         if not generated_test:
-            print(f"[ERROR] Failed to generate test for {class_name}")
+            print(f"[ERROR] Failed to generate output-test for {class_name}")
             return
 
         # Build accuracy check prompt
-        accuracy_prompt = PromptBuilder.PromptBuilder.generate_accurate_prompt(file_content, generated_test)
+        accuracy_prompt = PromptBuilder.generate_accurate_prompt(file_content, generated_test)
         feedback = self.llm_client.generate(accuracy_prompt)
 
-        # Save generated test code
+        # Clean the generated test code
+        clean_test_code = self.clean_generated_code(generated_test)
+        clean_feedback = self.clean_generated_code(feedback)
+
+        # Save generated output-test code
         filename = os.path.basename(filepath)
-        test_filename = filename.replace(".kt", f"{class_name}Test.kt")
+        base_name = filename.replace(".kt", "")
+        test_filename = f"{class_name}Test.kt"
         test_path = os.path.join(self.test_dir, test_filename)
 
         with open(test_path, "w", encoding="utf-8") as f:
-            f.write(generated_test)
+            f.write(clean_test_code)
 
-        print(f"[✅] Generated test: {test_path}")
-        print(f"[🔍] Accuracy & Reliability feedback:\n{feedback}\n")
+        print(f"[✅] Generated output-test: {test_path}")
+        print(f"[🔍] Accuracy & Reliability feedback:\n{clean_feedback}\n")
 
     def generate_tests_for_all(self):
         print(f"[INFO] Scanning source directory: {self.source_dir}")
         for root, dirs, files in os.walk(self.source_dir):
-            if 'datastore' in dirs:
-                dirs.remove('datastore')
+            if 'testcase--datastore' in dirs:
+                dirs.remove('testcase--datastore')
             for file in files:
                 if file.endswith(".kt"):
                     full_path = os.path.join(root, file)
@@ -73,9 +112,9 @@ class KotlinTestGenerator:
 if __name__ == "__main__":
     import sys
 
-    source_dir = sys.argv[1] if len(sys.argv) > 1 else ("src" if os.path.exists("") else ".")
-    test_dir = "test"
-    existing_tests_dir = "datastore"
+    source_dir = sys.argv[1] if len(sys.argv) > 1 else ("src/input-src" if os.path.exists("src/input-src") else ".")
+    test_dir = "src/output-test"
+    existing_tests_dir = "src/testcase--datastore"
     llm_client = LLMClient(api_url=OLLAMA_API_URL, model_name=MODEL_NAME)
     indexer = EmbeddingIndexer(test_dir=existing_tests_dir)
     generator = KotlinTestGenerator(source_dir=source_dir, test_dir=test_dir, llm_client=llm_client, indexer=indexer)
