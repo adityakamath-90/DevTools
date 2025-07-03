@@ -1,53 +1,69 @@
 # Architecture Documentation
-## Kotlin Development Tools - AI-Powered Documentation & Test Generation
+## AI-Powered Kotlin Test Generation System
 
 ### Overview
-This project implements an AI-powered system for Kotlin development that automatically generates KDoc documentation and intelligent test cases using Large Language Models (LLMs) and semantic embedding techniques. The system leverages CodeLlama for code generation and sentence transformers with FAISS for semantic similarity matching.
+This project implements an advanced AI-powered system for Kotlin test generation that automatically creates comprehensive JUnit 5 test cases using Large Language Models (CodeLlama) and semantic similarity matching with Microsoft CodeBERT embeddings. The system features intelligent fallback mechanisms and robust error handling for production use.
 
-## 🎯 Key Achievements & Recent Enhancements
+## 🎯 Key Achievements & System Capabilities
 
-### ✅ Fully Functional System
-- **Test Generation**: Successfully generates comprehensive JUnit 5 test cases
-- **Semantic Similarity**: Working embedding system with FAISS indexing
-- **Clean Output**: Production-ready Kotlin test code
-- **Batch Processing**: Handles entire directories of Kotlin files
-- **Error Handling**: Graceful degradation and comprehensive error reporting
+### ✅ Production-Ready Features
+- **Intelligent Test Generation**: Creates comprehensive JUnit 5 test cases with MockK support
+- **Semantic Similarity Matching**: Microsoft CodeBERT embeddings with FAISS indexing
+- **Fallback System**: SimpleEmbeddingIndexer for environments without ML dependencies
+- **Advanced Class Detection**: Smart regex patterns with comment filtering and class prioritization
+- **Clean Code Output**: Automatic markdown removal and production-ready formatting
+- **Comprehensive Error Handling**: Graceful degradation with backup and recovery mechanisms
+- **Batch Processing**: Handles entire directories with progress tracking and logging
 
-### 🔧 Technical Improvements
-- **Enhanced Class Detection**: Advanced regex patterns that distinguish data classes from regular classes
-- **Comment Filtering**: Removes comments before class extraction to prevent false matches
-- **Markdown Cleaning**: Automatically removes markdown formatting from generated code
-- **Context-Aware Generation**: Uses similar existing test cases for better quality
-- **Intelligent Prioritization**: Prefers main classes over data classes when multiple classes exist
+### 🔧 Advanced Technical Features
+- **Dual Indexing System**: Advanced CodeBERT embeddings with simple text fallback
+- **Context-Aware Generation**: Uses similar existing test patterns for improved quality
+- **Intelligent Class Prioritization**: Distinguishes between data classes and regular classes
+- **Comment-Aware Parsing**: Removes single-line and multi-line comments before processing
+- **Markdown Cleaning Pipeline**: Removes formatting artifacts from generated code
+- **Backup and Recovery**: Creates backups before modifications with automatic restoration
 
-### 🧠 Embedding System
-- **Semantic Indexing**: Uses `sentence-transformers` with `all-MiniLM-L6-v2` model
-- **Fast Search**: FAISS indexing for efficient similarity matching
-- **Context Injection**: Top-3 similar tests used as generation context
-- **Sample Database**: Pre-loaded with diverse test examples for training
+### 🧠 ML/AI Integration
+- **Microsoft CodeBERT**: Code-aware embeddings for semantic similarity
+- **FAISS Vector Search**: Efficient similarity matching with IndexFlatL2
+- **CodeLlama Integration**: Via Ollama for high-quality code generation
+- **PyTorch Backend**: Tensor operations for embedding computation
+- **Hugging Face Integration**: Automatic model downloading and caching
 
 ## System Architecture
 
 ### High-Level Architecture
 
-For visual system architecture diagrams, see **[DIAGRAMS.md](./DIAGRAMS.md)** which contains comprehensive Mermaid diagrams showing:
-- System component relationships
-- Data flow architecture  
-- Class interactions
-- Deployment structure
+For comprehensive visual system architecture diagrams, see **[DIAGRAMS.md](./DIAGRAMS.md)** which contains detailed Mermaid diagrams showing:
+- Updated system component relationships with fallback mechanisms
+- Enhanced data flow architecture with ML pipeline
+- Class interaction diagrams with inheritance patterns
+- Deployment structure with ML stack integration
+- Sequence diagrams showing the complete generation workflow
 
-## Component Architecture
+## Enhanced Component Architecture
 
-### 1. Enhanced Test Generation System ⭐ *Core Feature*
+### 1. Intelligent Test Generation System ⭐ *Core Enhanced Feature*
 
-The test generation system is the primary component, enhanced with semantic similarity matching for context-aware test generation.
+The test generation system is the primary component, featuring advanced semantic similarity matching and robust fallback mechanisms for production environments.
 
-**Key Components:**
-- **TestCaseGenerator**: Main orchestrator that processes Kotlin files and generates comprehensive test cases
-- **EmbeddingIndexer**: Semantic indexing system using sentence transformers and FAISS
-- **LLMClient**: Interface to Ollama/CodeLlama for AI-powered generation
-- **PromptBuilder**: Intelligent prompt construction with context injection
-- **Class Detector**: Advanced regex-based system to identify and prioritize classes
+**Core Components:**
+- **KotlinTestGenerator**: Main orchestrator with enhanced error handling and logging
+- **EmbeddingIndexer**: Advanced semantic indexing using Microsoft CodeBERT and FAISS
+- **SimpleEmbeddingIndexer**: Lightweight fallback system for constrained environments
+- **LLMClient**: Robust Ollama/CodeLlama interface with error recovery
+- **PromptBuilder**: Context-aware prompt construction with template system
+- **Advanced Class Detection**: Multi-pattern regex system with intelligent prioritization
+
+**Enhanced Workflow:**
+1. **File Discovery**: Recursive scanning with intelligent filtering
+2. **Class Extraction**: Comment-aware parsing with multiple class handling
+3. **Semantic Analysis**: CodeBERT embeddings or simple text matching (fallback)
+4. **Context Building**: Integration of similar test patterns
+5. **AI Generation**: CodeLlama with structured prompts
+6. **Quality Assurance**: Validation and feedback loops
+7. **Code Cleaning**: Markdown removal and formatting standardization
+8. **Safe File Operations**: Backup creation and atomic writes
 
 **Enhanced Features:**
 - Semantic similarity matching using existing test cases

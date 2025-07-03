@@ -1,14 +1,14 @@
 # API Documentation
-## Kotlin Development Tools - Component APIs
+## AI-Powered Kotlin Test Generation System - Component APIs
 
 ### Overview
-This document describes the APIs and interfaces for all components in the Kotlin Development Tools project, with a focus on the enhanced test generation system with semantic similarity matching.
+This document describes the APIs and interfaces for all components in the AI-powered Kotlin test generation system, featuring Microsoft CodeBERT embeddings for semantic similarity matching and fallback mechanisms for robust operation.
 
 ## Core Classes and APIs
 
 ### 1. KotlinTestGenerator (Main Component)
 
-**Purpose**: Main orchestrator for AI-powered test case generation with semantic similarity matching.
+**Purpose**: Main orchestrator for AI-powered test case generation with semantic similarity matching and fallback support.
 
 ```python
 class KotlinTestGenerator:
@@ -20,21 +20,22 @@ class KotlinTestGenerator:
 ```
 
 #### Constructor Parameters
-- `source_dir` (str): Directory containing Kotlin source files
-- `test_dir` (str): Output directory for generated test files
-- `llm_client` (LLMClient): Interface to the LLM service
-- `indexer` (EmbeddingIndexer): Semantic similarity indexer
+- `source_dir` (str): Directory containing Kotlin source files (default: `src/input-src/`)
+- `test_dir` (str): Output directory for generated test files (default: `output-test/`)
+- `llm_client` (LLMClient): Interface to the Ollama/CodeLlama service
+- `indexer` (EmbeddingIndexer|SimpleEmbeddingIndexer): Semantic similarity indexer with fallback
 
 #### Methods
 
 ##### `extract_class_name(code: str) -> Optional[str]`
-Enhanced class name extraction with intelligent prioritization.
+Enhanced class name extraction with intelligent prioritization and comment filtering.
 
 **Features:**
-- Removes comments to avoid false matches
+- Removes single-line (`//`) and multi-line (`/* */`) comments
 - Distinguishes between data classes and regular classes
-- Prioritizes main classes over data classes
+- Prioritizes non-data classes over data classes
 - Handles multiple class definitions in a single file
+- Supports both `class` and `object` declarations
 
 **Parameters:**
 - `code` (str): Kotlin source code content
@@ -42,65 +43,181 @@ Enhanced class name extraction with intelligent prioritization.
 **Returns:**
 - `Optional[str]`: Extracted class name or None if not found
 
+**Example:**
+```python
+code = """
+// Main calculator class
+class Calculator {
+    fun add(a: Int, b: Int): Int = a + b
+}
+
+data class Result(val value: Int)
+"""
+generator = KotlinTestGenerator(...)
+class_name = generator.extract_class_name(code)
+# Returns: "Calculator" (prioritizes non-data class)
+```
+
 ##### `clean_generated_code(generated_code: str) -> str`
-Removes markdown formatting from generated test code.
+Removes markdown formatting and cleans up generated test code for production use.
+
+**Features:**
+- Removes markdown code blocks (`\`\`\`kotlin`, `\`\`\``)
+- Strips leading/trailing whitespace
+- Preserves code structure and formatting
 
 **Parameters:**
-- `generated_code` (str): Raw generated code with potential markdown
+- `generated_code` (str): Raw generated code with potential markdown formatting
+
+**Returns:**
+- `str`: Clean, production-ready Kotlin test code
+
+**Example:**
+```python
+raw_code = """
+\`\`\`kotlin
+class CalculatorTest {
+    @Test
+    fun testAdd() {
+        assertEquals(5, Calculator().add(2, 3))
+    }
+}
+\`\`\`
+"""
+clean_code = generator.clean_generated_code(raw_code)
+# Returns clean Kotlin code without markdown
+```
 
 **Returns:**
 - `str`: Clean Kotlin code without markdown formatting
 
 ##### `process_file(filepath: str) -> None`
-Processes a single Kotlin file and generates corresponding test cases.
+Processes a single Kotlin file and generates corresponding test cases with comprehensive error handling.
 
 **Workflow:**
-1. Extract class name from source code
-2. Retrieve similar test cases using embeddings
-3. Generate test code with AI using context
-4. Generate accuracy feedback
-5. Clean and save the generated test file
+1. Read and validate the Kotlin source file
+2. Extract class name from source code
+3. Retrieve similar test cases using semantic similarity
+4. Generate test code with AI using contextual prompts
+5. Generate accuracy validation feedback
+6. Clean and format the generated test code
+7. Save test file to output directory with backup
+
+**Error Handling:**
+- File read/write errors with graceful recovery
+- Missing class detection with informative warnings
+- LLM generation failures with fallback behavior
+- Backup restoration on write failures
+
+**Example:**
+```python
+generator.process_file("src/input-src/Calculator.kt")
+# Generates: output-test/CalculatorTest.kt
+```
 
 ##### `generate_tests_for_all() -> None`
-Batch processes all Kotlin files in the source directory.
+Batch processes all Kotlin files in the source directory with progress tracking.
+
+**Features:**
+- Recursive directory scanning for `.kt` files
+- Excludes `testcase--datastore` directory to prevent recursion
+- Progress logging and error reporting
+- Continues processing on individual file failures
 
 ---
 
-### 2. EmbeddingIndexer
+### 2. EmbeddingIndexer (Advanced Semantic Similarity)
 
-**Purpose**: Manages semantic indexing and similarity search for existing test cases using sentence transformers and FAISS.
+**Purpose**: Manages semantic indexing and similarity search using Microsoft CodeBERT embeddings and FAISS for high-quality test case matching.
 
 ```python
 class EmbeddingIndexer:
-    def __init__(self, test_dir: str)
-    def load_test_cases(self) -> List[str]
-    def build_index(self) -> None
-    def retrieve_similar(self, query: str, top_k: int = 3) -> List[str]
+    def __init__(self, test_dir: str, embedding_model_name: str = "microsoft/codebert-base")
+    def _load_and_index(self) -> None
+    def _encode(self, texts: List[str]) -> torch.Tensor
+    def retrieve_similar(self, code: str, top_k: int = 3) -> List[str]
 ```
 
-#### Enhanced Features
-- Uses `sentence-transformers` with `all-MiniLM-L6-v2` model
-- FAISS index for fast similarity search
+#### Advanced Features
+- Uses Microsoft CodeBERT for code-aware embeddings
+- FAISS IndexFlatL2 for efficient similarity search
+- PyTorch backend for tensor operations
+- Automatic model downloading and caching
 - Graceful handling of empty test case directories
-- Top-K similarity matching with configurable results
 
 #### Methods
 
-##### `retrieve_similar(query: str, top_k: int = 3) -> List[str]`
-Finds the most similar existing test cases for a given source code.
+##### `__init__(test_dir: str, embedding_model_name: str = "microsoft/codebert-base")`
+Initializes the embedding indexer with automatic model loading and indexing.
 
 **Parameters:**
-- `query` (str): Source code to find similar tests for
+- `test_dir` (str): Directory containing reference test cases
+- `embedding_model_name` (str): Hugging Face model identifier
+
+**Process:**
+1. Downloads and loads CodeBERT model and tokenizer
+2. Loads all `.kt` files from test directory
+3. Generates embeddings for all test cases
+4. Builds FAISS index for similarity search
+
+##### `retrieve_similar(code: str, top_k: int = 3) -> List[str]`
+Finds the most semantically similar existing test cases for given source code.
+
+**Parameters:**
+- `code` (str): Kotlin source code to find similar tests for
 - `top_k` (int): Number of similar tests to return (default: 3)
 
 **Returns:**
-- `List[str]`: List of similar test case contents
+- `List[str]`: List of similar test case contents, ranked by similarity
+
+**Process:**
+1. Encode input code using CodeBERT
+2. Search FAISS index for nearest neighbors
+3. Return top-K most similar test cases
+
+**Example:**
+```python
+indexer = EmbeddingIndexer("src/testcase--datastore/")
+similar_tests = indexer.retrieve_similar(kotlin_code, top_k=3)
+# Returns: List of 3 most similar test case strings
+```
 
 ---
 
-### 3. LLMClient
+### 3. SimpleEmbeddingIndexer (Fallback System)
 
-**Purpose**: Provides a unified interface for interacting with Large Language Models via Ollama.
+**Purpose**: Provides a lightweight fallback when advanced ML dependencies are unavailable.
+
+```python
+class SimpleEmbeddingIndexer:
+    def __init__(self, test_dir: str)
+    def _load_test_cases(self) -> None
+    def retrieve_similar(self, code: str, top_k: int = 3) -> List[str]
+```
+
+#### Features
+- No ML dependencies required
+- Simple text-based matching
+- Fast initialization and operation
+- Automatic fallback when EmbeddingIndexer fails
+
+#### Methods
+
+##### `retrieve_similar(code: str, top_k: int = 3) -> List[str]`
+Returns available test cases (simplified matching algorithm).
+
+**Parameters:**
+- `code` (str): Input code (used for interface compatibility)
+- `top_k` (int): Number of test cases to return
+
+**Returns:**
+- `List[str]`: First K available test cases
+
+---
+
+### 4. LLMClient (Ollama Integration)
+
+**Purpose**: Provides a unified interface for interacting with CodeLlama via Ollama server.
 
 ```python
 class LLMClient:
