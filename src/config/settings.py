@@ -137,9 +137,9 @@ config = Config()
 class GenerationConfig:
     """Configuration for test generation workflow."""
     
-    source_dir: str = "src/input-src"
+    source_dir: str = "input-src"
     output_dir: str = "output-test"
-    existing_tests_dir: str = "src/testcase--datastore"
+    existing_tests_dir: str = "testcase-datastore"
     
     # Generation parameters
     temperature: float = 0.1

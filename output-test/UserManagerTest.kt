@@ -1,74 +1,91 @@
 package com.example.user
 
-import io.mockk.*
+import io.mockk.every
+import io.mockk.impl.annotations.MockK
+import io.mockk.junit5.MockKExtension
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
+import java.lang.IllegalArgumentException
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
-class UserManagerTest {
-    private val userManager = mockk<UserManager>()
+@ExtendWith(MockKExtension::class)
+internal class UserManagerTest {
+    @MockK
+    private lateinit var users: MutableList<User>
 
     @Test
-    fun `createUser should create a new user`() {
+    fun `create user should return created user`() {
         // given
-        val username = "john"
-        val email = "john@example.com"
+        val username = "username"
+        val email = "email@example.com"
+
+        every { users.add(any()) } returns true
 
         // when
-        userManager.createUser(username, email)
+        val user = UserManager().createUser(username, email)
 
         // then
-        verify { userManager.createUser(any(), any()) }
+        assertEquals(1L, user.id)
+        assertEquals(username, user.username)
+        assertEquals(email, user.email)
+        assertTrue(user.isActive)
     }
 
     @Test
-    fun `findUserById should return a user`() {
+    fun `create user should throw IllegalArgumentException for empty username`() {
+        // given
+        val username = ""
+        val email = "email@example.com"
+
+        every { users.add(any()) } returns true
+
+        // when, then
+        assertFailsWith<IllegalArgumentException>("Username cannot be empty") {
+            UserManager().createUser(username, email)
+        }
+    }
+
+    @Test
+    fun `create user should throw IllegalArgumentException for empty email`() {
+        // given
+        val username = "username"
+        val email = ""
+
+        every { users.add(any()) } returns true
+
+        // when, then
+        assertFailsWith<IllegalArgumentException>("Email cannot be empty") {
+            UserManager().createUser(username, email)
+        }
+    }
+
+    @Test
+    fun `find user by id should return user`() {
         // given
         val id = 1L
-        val user = User(id, "john", "john@example.com")
-        every { userManager.findUserById(id) } returns user
+        every { users.firstOrNull { it.id == id } } returns User(1L, "username", "email@example.com")
 
         // when
-        val result = userManager.findUserById(id)
+        val user = UserManager().findUserById(id)
 
         // then
-        assertEquals(user, result)
+        assertEquals(id, user?.id)
+        assertEquals("username", user?.username)
+        assertEquals("email@example.com", user?.email)
     }
 
     @Test
-    fun `updateUserStatus should update a user's active status`() {
+    fun `find user by id should return null for non-existent id`() {
         // given
         val id = 1L
-        val isActive = false
-        val user = User(id, "john", "john@example.com")
-        every { userManager.updateUserStatus(id, isActive) } returns true
+        every { users.firstOrNull { it.id == id } } returns null
 
         // when
-        val result = userManager.updateUserStatus(id, isActive)
+        val user = UserManager().findUserById(id)
 
         // then
-        assertEquals(true, result)
-    }
-
-    @Test
-    fun `createUser should throw an exception if a user with the same email already exists`() {
-        // given
-        val username = "john"
-        val email = "john@example.com"
-        every { userManager.findUserByEmail(email) } returns User(1L, "john", email)
-
-        // when
-        assertFailsWith<Exception> { userManager.createUser(username, email) }
-    }
-
-    @Test
-    fun `updateUserStatus should throw an exception if a user with the same email already exists`() {
-        // given
-        val id = 1L
-        val isActive = false
-        every { userManager.findUserById(id) } returns User(1L, "john", "john@example.com")
-
-        // when
-        assertFailsWith<Exception> { userManager.updateUserStatus(id, isActive) }
+        assertEquals(null, user)
     }
 }

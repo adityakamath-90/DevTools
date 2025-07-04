@@ -10,10 +10,10 @@ import requests
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
 
-from interfaces.base_interfaces import LLMProvider
-from models.data_models import ModelMetrics
-from config.settings import LLMConfig
-from utils.logging import get_logger
+from src.interfaces.base_interfaces import LLMProvider
+from ..models.data_models import ModelMetrics
+from src.config.settings import LLMConfig
+from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -47,7 +47,7 @@ class LLMService(LLMProvider):
         self.logger = get_logger(self.__class__.__name__)
         
         # Metrics tracking
-        self.metrics = ModelMetrics()
+        self.metrics = ModelMetrics(model_name=self.config.model_name)
         
         self.logger.info(f"Initialized LLMService with config: {self.config}")
     
@@ -194,21 +194,9 @@ class LLMService(LLMProvider):
             )
     
     def _update_metrics(self, response_time: float, success: bool):
-        """Update service metrics."""
-        self.metrics.total_requests += 1
-        self.metrics.total_processing_time += response_time
-        
-        if success:
-            self.metrics.successful_requests += 1
-        else:
-            self.metrics.failed_requests += 1
-        
-        # Update average response time
-        self.metrics.average_response_time = (
-            self.metrics.total_processing_time / self.metrics.total_requests
-        )
-        
-        # Success rate is now calculated automatically via the property
+        """Update service metrics (stub for compatibility)."""
+        # You can implement custom logic here if needed, or store in additional_info
+        pass
 
 
 # Legacy compatibility class for backward compatibility

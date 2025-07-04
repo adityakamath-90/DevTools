@@ -1,18 +1,7 @@
 """
-Intelligent prompt builder for AI-powered Kotlin test generation        try:
-            context = self._build_context_string(similar_tests)
-            
-            template = self._templates['generation']
-            prompt = template.template.format(
-                class_name=kotlin_class.name,
-                class_code=kotlin_class.source_code,
-                context=context
-            )  template = self._templates['generation']
-            prompt = template.template.format(
-                class_name=kotlin_class.name,
-                class_code=kotlin_class.source_code,
-                context=context
-            )module provides sophisticated prompt construction capabilities for different
+Intelligent prompt builder for AI-powered Kotlin test generation.
+
+This module provides sophisticated prompt construction capabilities for different
 types of code generation tasks, with template-based approach and context awareness.
 """
 
@@ -73,22 +62,18 @@ class PromptBuilder(IPromptBuilder):
             Formatted prompt string for test generation
         """
         self.logger.info(f"Building generation prompt for class: {kotlin_class.name}")
-        
         try:
             context = self._build_context_string(similar_tests)
             methods_info = self._build_methods_info(kotlin_class)
-            
             template = self._templates['generation']
             prompt = template.template.format(
                 class_name=kotlin_class.name,
                 class_code=kotlin_class.source_code,
-                context=context,
+                similar_tests=context,
                 methods_info=methods_info
             )
-            
             self.logger.debug(f"Generated prompt length: {len(prompt)} characters")
             return prompt
-            
         except Exception as e:
             self.logger.error(f"Error building generation prompt: {e}")
             # Fallback to basic prompt
@@ -110,16 +95,13 @@ class PromptBuilder(IPromptBuilder):
             Formatted prompt string for test validation
         """
         self.logger.info(f"Building validation prompt for class: {kotlin_class.name}")
-        
         try:
             template = self._templates['accuracy']
             prompt = template.template.format(
                 class_code=kotlin_class.source_code,
                 generated_test=generated_test
             )
-            
             return prompt
-            
         except Exception as e:
             self.logger.error(f"Error building validation prompt: {e}")
             # Fallback to basic prompt

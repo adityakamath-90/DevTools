@@ -21,6 +21,7 @@ from src.services.embedding_service import EmbeddingIndexerService, SimpleEmbedd
 from src.services.kdoc_service import KDocService
 from src.core.test_generator import KotlinTestGenerator
 from src.utils.logging import get_logger
+from src.models.data_models import GenerationStatus
 
 logger = get_logger(__name__)
 
@@ -108,18 +109,21 @@ class GenAIApplication:
             results = self.test_generator.generate_tests_for_directory(source_dir)
             
             # Report results
-            successful = sum(1 for r in results if r.is_successful)
+            successful = sum(1 for r in results if (getattr(r, 'status', None) == GenerationStatus.COMPLETED or getattr(r, 'status', None) == 'completed' or getattr(r, 'status', None).value == 'completed'))
             total = len(results)
-            
             self.logger.info(f"Test generation completed: {successful}/{total} files successful")
-            
             # Print detailed results
             for result in results:
-                if result.is_successful:
-                    print(f"✅ Generated test: {result.output_file}")
+                status = getattr(result, 'status', None)
+                is_success = (
+                    status == GenerationStatus.COMPLETED or
+                    status == 'completed' or
+                    (hasattr(status, 'value') and status.value == 'completed')
+                )
+                if is_success:
+                    print(f"✅ Generated test: {getattr(result, 'output_file', '[no file]')}")
                 else:
-                    print(f"❌ Failed: {result.source_file} - {result.error_message}")
-            
+                    print(f"❌ Failed: {getattr(result, 'output_file', '[no file]')} - {result.error_message}")
             return successful > 0
             
         except Exception as e:

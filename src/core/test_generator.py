@@ -86,73 +86,67 @@ class KotlinTestGenerator(TestGenerator):
         Returns:
             GenerationResult with generated test code and metadata
         """
-        self.logger.info(f"Starting test generation for: {request.source_file}")
+        self.logger.info(f"Starting test generation for class: {request.class_name}")
         
         try:
             # Parse the source code
-            kotlin_class = request.kotlin_class
-            if not kotlin_class:
-                return GenerationResult(
-                    request_id=request.request_id,
-                    status=GenerationStatus.FAILED,
-                    source_file=request.source_file,
-                    output_file=request.output_file,
-                    error_message="Failed to parse Kotlin class"
-                )
-            
+            # Parse the source code (reconstruct KotlinClass from request fields)
+            kotlin_class = KotlinClass(
+                name=request.class_name,
+                source_code=request.source_code
+            )
             self.logger.info(f"Successfully parsed class: {kotlin_class.name}")
-            
             # Find similar tests for context
             similar_tests = self._find_similar_tests(kotlin_class)
             self.logger.info(f"Found {len(similar_tests)} similar tests")
-            
             # Generate test code
             test_code = self._generate_test_code(kotlin_class, similar_tests)
             if not test_code:
+                self.logger.error(f"No test code generated for class {kotlin_class.name}. LLM/test output: {test_code}")
                 return GenerationResult(
                     request_id=request.request_id,
                     status=GenerationStatus.FAILED,
-                    source_file=request.source_file,
-                    output_file=request.output_file,
                     error_message="Failed to generate test code"
                 )
-            
             # Validate and improve test code
-            improved_test_code = self._validate_and_improve_test(kotlin_class, test_code)
-            
+            # improved_test_code = self._validate_and_improve_test(kotlin_class, test_code)
             # Clean the generated code
-            final_test_code = self._clean_generated_code(improved_test_code or test_code)
-            
-            # Save the test file
-            test_file_path = self._save_test_file(kotlin_class, final_test_code)
-            
-            # Update statistics
+            final_test_code = self._clean_generated_code(test_code or test_code)
+            self.logger.info(f"Final generated test code for {kotlin_class.name}:\n{final_test_code}\n---END---")
+
+            # Success criteria: non-empty, contains at least one 'class' or '@Test' or 'fun' keyword
+            is_success = bool(final_test_code and ("class " in final_test_code or "@Test" in final_test_code or "fun " in final_test_code))
+
+            # Save the test file if generation was successful
+            output_file = getattr(request, 'output_file', None)
+            # If output_file is not set, generate it
+            if not output_file:
+                output_file = os.path.join(self.config.output_dir, f"{kotlin_class.name}Test.kt")
+            if is_success:
+                try:
+                    saved_path = self._save_test_file(kotlin_class, final_test_code)
+                    output_file = os.path.abspath(saved_path)
+                except Exception as e:
+                    self.logger.error(f"Failed to save test file: {e}")
+                    is_success = False
+                    output_file = None
+            else:
+                output_file = None
             self.stats.tests_generated += 1
-            
-            # Create test case
-            test_case = TestCase(
-                id=str(uuid.uuid4()),
-                class_name=kotlin_class.name,
-                test_name=f"{kotlin_class.name}Test",
-                test_code=final_test_code
-            )
-            
+            test_case = TestCase(name=f"{kotlin_class.name}Test")
             return GenerationResult(
                 request_id=request.request_id,
-                status=GenerationStatus.COMPLETED,
-                source_file=request.source_file,
-                output_file=request.output_file,
-                generated_tests=[test_case],
-                similar_tests_count=len(similar_tests)
+                status=GenerationStatus.COMPLETED if is_success else GenerationStatus.FAILED,
+                test_code=final_test_code,
+                output_file=output_file,
+                error_message=None if is_success else "Generated code did not meet success criteria"
             )
             
         except Exception as e:
-            self.logger.error(f"Error generating tests for {request.kotlin_class.file_path}: {e}")
+            self.logger.error(f"Error generating tests for class {request.class_name}: {e}")
             return GenerationResult(
                 request_id=request.request_id,
                 status=GenerationStatus.FAILED,
-                source_file=request.source_file,
-                output_file=request.output_file,
                 error_message=str(e)
             )
     
@@ -199,10 +193,13 @@ class KotlinTestGenerator(TestGenerator):
                 output_file = os.path.join(self.config.output_dir, f"{kotlin_class.name}Test.kt")
                 
                 request = GenerationRequest(
-                    source_file=file_path,
-                    kotlin_class=kotlin_class,
-                    output_file=output_file
+                    request_id=str(uuid.uuid4()),
+                    class_name=kotlin_class.name,
+                    source_code=kotlin_class.source_code or "",
+                    parameters=None
                 )
+                # Attach output_file for downstream reporting
+                setattr(request, 'output_file', output_file)
                 
                 # Generate tests
                 result = self.generate_tests(request)
@@ -210,7 +207,7 @@ class KotlinTestGenerator(TestGenerator):
                 
                 # Update statistics
                 self.stats.files_processed += 1
-                if result.is_successful:
+                if result.status == GenerationStatus.COMPLETED:
                     self.stats.files_succeeded += 1
                 else:
                     self.stats.files_failed += 1
@@ -223,15 +220,14 @@ class KotlinTestGenerator(TestGenerator):
                     file_path=file_path
                 )
                 request = GenerationRequest(
-                    source_file=file_path,
-                    kotlin_class=kotlin_class,
-                    output_file=""
+                    request_id=str(uuid.uuid4()),
+                    class_name=kotlin_class.name,
+                    source_code=kotlin_class.source_code or "",
+                    parameters=None
                 )
                 results.append(GenerationResult(
                     request_id=request.request_id,
                     status=GenerationStatus.FAILED,
-                    source_file=request.source_file,
-                    output_file=request.output_file,
                     error_message=str(e)
                 ))
                 self.stats.files_failed += 1
@@ -260,12 +256,15 @@ class KotlinTestGenerator(TestGenerator):
             ModelMetrics object with performance data
         """
         return ModelMetrics(
-            total_requests=self.stats.files_processed,
-            successful_requests=self.stats.files_succeeded,
-            failed_requests=self.stats.files_failed,
-            average_response_time=self.stats.total_processing_time / max(1, self.stats.files_processed),
-            success_rate=self.stats.success_rate(),
-            total_processing_time=self.stats.total_processing_time
+            model_name="KotlinTestGenerator",
+            additional_info={
+                "files_processed": self.stats.files_processed,
+                "files_succeeded": self.stats.files_succeeded,
+                "files_failed": self.stats.files_failed,
+                "average_response_time": self.stats.total_processing_time / max(1, self.stats.files_processed),
+                "success_rate": self.stats.success_rate(),
+                "total_processing_time": self.stats.total_processing_time
+            }
         )
     
     def _find_kotlin_files(self, source_dir: str) -> List[str]:
@@ -315,42 +314,46 @@ class KotlinTestGenerator(TestGenerator):
         """Validate and improve the generated test code."""
         if not self.config.enable_validation:
             return None
-        
+
         try:
-            validation_prompt = self.prompt_builder.build_validation_prompt(kotlin_class, test_code)
-            
+            # Ensure the variable name matches the template: pass as 'test_code'
+            validation_prompt = self.prompt_builder.build_validation_prompt(kotlin_class, test_code=test_code)
+
             improved_code = self.llm_provider.generate(
                 validation_prompt,
                 temperature=0.1,  # Lower temperature for validation
                 max_tokens=self.config.max_tokens
             )
-            
+
             return improved_code
-            
+
         except Exception as e:
             self.logger.warning(f"Error validating test code: {e}")
             return None
     
     def _clean_generated_code(self, generated_code: str) -> str:
-        """Clean up the generated code by removing markdown formatting."""
+        """Extract only Kotlin code from LLM output, robust to summaries and markdown."""
         if not generated_code:
             return ""
-        
-        # Remove markdown code blocks
         code = generated_code.strip()
-        
-        # Remove kotlin markdown blocks
-        if code.startswith("```kotlin"):
-            code = code[9:]
-        elif code.startswith("```"):
-            code = code[3:]
-        
-        if code.endswith("```"):
-            code = code[:-3]
-        
-        # Remove any leading/trailing whitespace
+        import re
+        # Prefer code blocks
+        code_blocks = re.findall(r"```kotlin(.*?)```", code, re.DOTALL | re.IGNORECASE)
+        if not code_blocks:
+            code_blocks = re.findall(r"```(.*?)```", code, re.DOTALL)
+        if code_blocks:
+            code = "\n".join(cb.strip() for cb in code_blocks)
+        else:
+            # Extract from first 'class', 'import', or 'package' to end
+            match = re.search(r'(class |import |package )', code)
+            if match:
+                code = code[match.start():]
+            else:
+                # If no code marker, fallback to all text
+                code = code
+            # Remove trailing ---END--- or similar markers
+            code = re.sub(r'---END---.*$', '', code, flags=re.DOTALL)
         code = code.strip()
-        
         return code
     
     def _save_test_file(self, kotlin_class: KotlinClass, test_code: str) -> str:
