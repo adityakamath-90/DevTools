@@ -1,0 +1,100 @@
+{
+  "total_files": 2,
+  "passed": 1,
+  "failed": 1,
+  "files": [
+    {
+      "file": "UserManagerTest.kt",
+      "path": "output-test/UserManagerTest.kt",
+      "validations": {
+        "syntax": {
+          "passed": null,
+          "message": "Kotlin compiler not available",
+          "skip_reason": "KOTLIN_HOME not set"
+        },
+        "structure": {
+          "passed": true,
+          "checks": {
+            "has_test_class": true,
+            "has_test_imports": true,
+            "has_test_methods": true,
+            "proper_naming": true
+          },
+          "message": "JUnit structure valid"
+        },
+        "imports": {
+          "passed": true,
+          "missing_imports": [],
+          "message": "All required imports present"
+        },
+        "test_methods": {
+          "passed": true,
+          "test_method_count": 5,
+          "issues": [],
+          "message": "Found 5 test methods"
+        },
+        "assertions": {
+          "passed": true,
+          "assertion_count": 10,
+          "message": "Found 10 assertions"
+        }
+      },
+      "overall_status": "passed",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "file": "CalculatorTest.kt",
+      "path": "output-test/CalculatorTest.kt",
+      "validations": {
+        "syntax": {
+          "passed": null,
+          "message": "Kotlin compiler not available",
+          "skip_reason": "KOTLIN_HOME not set"
+        },
+        "structure": {
+          "passed": false,
+          "checks": {
+            "has_test_class": true,
+            "has_test_imports": false,
+            "has_test_methods": true,
+            "proper_naming": true
+          },
+          "message": "JUnit structure issues found"
+        },
+        "imports": {
+          "passed": false,
+          "missing_imports": [
+            "org\\.junit\\.jupiter\\.api\\.Test",
+            "kotlin\\.test\\.\\w+|org\\.junit\\.jupiter\\.api\\.Assertions\\.\\w+"
+          ],
+          "message": "Missing imports: ['org\\\\.junit\\\\.jupiter\\\\.api\\\\.Test', 'kotlin\\\\.test\\\\.\\\\w+|org\\\\.junit\\\\.jupiter\\\\.api\\\\.Assertions\\\\.\\\\w+']"
+        },
+        "test_methods": {
+          "passed": true,
+          "test_method_count": 8,
+          "issues": [
+            "Method 'add two integers' doesn't follow naming convention",
+            "Method 'subtract second number from first' doesn't follow naming convention",
+            "Method 'multiply two integers' doesn't follow naming convention",
+            "Method 'divide first number by second' doesn't follow naming convention",
+            "Method 'calculate power of a number' doesn't follow naming convention",
+            "Method 'square root of positive number' doesn't follow naming convention",
+            "Method 'absolute value of positive number' doesn't follow naming convention"
+          ],
+          "message": "Found 8 test methods, 7 naming issues"
+        },
+        "assertions": {
+          "passed": true,
+          "assertion_count": 8,
+          "message": "Found 8 assertions"
+        }
+      },
+      "overall_status": "failed",
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "summary": {},
+  "success_rate": 50.0
+}

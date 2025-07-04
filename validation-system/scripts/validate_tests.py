@@ -17,8 +17,25 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import json
 import re
+import sys
 
-from src.utils.logging import get_logger
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "../../.."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+# Robust import for get_logger
+try:
+    from src.utils.logging import get_logger
+except ModuleNotFoundError:
+    try:
+        from utils.logging import get_logger
+    except ModuleNotFoundError:
+        def get_logger(name):
+            import logging
+            logging.basicConfig(level=logging.INFO)
+            return logging.getLogger(name)
 
 logger = get_logger(__name__)
 
@@ -292,13 +309,19 @@ def validate_generated_tests():
     validator = KotlinTestValidator()
     results = validator.validate_all_tests()
     
+
     # Save detailed results to JSON
     with open("validation_results.json", "w") as f:
         json.dump(results, f, indent=2)
-    
+
     print(f"\n📊 Validation complete! Results saved to validation_results.json")
-    print(f"📈 Success rate: {results['success_rate']:.1f}%")
-    
+    if 'success_rate' in results:
+        print(f"📈 Success rate: {results['success_rate']:.1f}%")
+    elif results.get('status') == 'no_tests':
+        print("⚠️  No test files found. Nothing to validate.")
+    else:
+        print("⚠️  Validation completed, but no success rate available.")
+
     return results
 
 

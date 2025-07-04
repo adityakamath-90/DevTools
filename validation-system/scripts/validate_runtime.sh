@@ -7,10 +7,10 @@ echo "🚀 Starting Kotlin Test Validation Pipeline"
 echo "============================================"
 
 # Configuration
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUTPUT_DIR="${PROJECT_ROOT}/output-test"
-VALIDATION_DIR="${PROJECT_ROOT}/validation"
-REPORTS_DIR="${PROJECT_ROOT}/validation-reports"
+VALIDATION_DIR="${PROJECT_ROOT}/validation-system/validation"
+REPORTS_DIR="${PROJECT_ROOT}/validation-system/validation-reports"
 
 # Create validation workspace
 setup_validation_workspace() {
@@ -51,44 +51,53 @@ validate_with_python() {
 # Validate with Gradle
 validate_with_gradle() {
     echo "🏗️  Running Gradle validation..."
-    
     cd "${VALIDATION_DIR}"
-    
+
+    # Ensure Gradle project exists in validation dir
+    if [ ! -f "settings.gradle" ] && [ ! -f "settings.gradle.kts" ]; then
+        echo "⚠️  No Gradle project found in ${VALIDATION_DIR}. Initializing new Gradle project..."
+        gradle init --type kotlin-application --dsl kotlin --project-name validation || {
+            echo "❌ Failed to initialize Gradle project"
+            cd "${PROJECT_ROOT}"
+            return 1
+        }
+    fi
+
     # Check if gradle wrapper exists, if not create a simple gradle command
     if [ -f "gradlew" ]; then
         GRADLE_CMD="./gradlew"
     else
         GRADLE_CMD="gradle"
     fi
-    
+
     # Check Gradle installation
     if ! command -v ${GRADLE_CMD} &> /dev/null; then
         echo "⚠️  Gradle not found. Skipping Gradle validation."
         cd "${PROJECT_ROOT}"
         return
     fi
-    
+
     echo "🔍 Compiling tests..."
     ${GRADLE_CMD} compileTestKotlin || {
         echo "❌ Test compilation failed"
         cd "${PROJECT_ROOT}"
         return 1
     }
-    
+
     echo "🧪 Running tests..."
     ${GRADLE_CMD} test --continue || {
         echo "⚠️  Some tests failed, but continuing..."
     }
-    
+
     echo "📊 Generating reports..."
-    ${GRADLE_CMD} validateGeneratedTests || true
-    
+    # Removed: ${GRADLE_CMD} validateGeneratedTests || true
+
     # Copy reports to main reports directory
     if [ -d "build/reports" ]; then
         cp -r build/reports/* "${REPORTS_DIR}/"
         echo "📁 Reports copied to: ${REPORTS_DIR}"
     fi
-    
+
     cd "${PROJECT_ROOT}"
 }
 
