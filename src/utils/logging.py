@@ -19,41 +19,65 @@ except ImportError:
 class StructuredFormatter(logging.Formatter):
     """Custom formatter for structured logging."""
     
+    # List of standard LogRecord attributes that we don't want to include as extra fields
+    STANDARD_ATTRS = {
+        'args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename',
+        'funcName', 'levelname', 'levelno', 'lineno', 'module', 'msecs',
+        'message', 'msg', 'name', 'pathname', 'process', 'processName',
+        'relativeCreated', 'stack_info', 'thread', 'threadName', 'taskName',
+        'getMessage'
+    }
+    
     def format(self, record: logging.LogRecord) -> str:
-        """Format log record with structured information."""
+        """
+        Format log record with structured information.
         
-        # Add timestamp
-        record.timestamp = datetime.now().isoformat()
+        Args:
+            record: The log record to format
+            
+        Returns:
+            Formatted log message as a string
+        """
+        # Make a copy of the record's __dict__ to avoid modifying the original
+        record_dict = dict(record.__dict__)
         
-        # Add component information
-        record.component = getattr(record, 'component', 'unknown')
-        record.operation = getattr(record, 'operation', 'unknown')
+        # Add our custom fields
+        record_dict['timestamp'] = datetime.now().isoformat()
+        record_dict['component'] = getattr(record, 'component', 'unknown')
+        record_dict['operation'] = getattr(record, 'operation', 'unknown')
         
-        # Get the actual message
-        record.message = record.getMessage()
+        # Get the message
+        record_dict['message'] = record.getMessage()
         
         # Base format
-        base_format = "[{timestamp}] [{levelname}] [{component}] {message}"
-        
-        # Add operation if present
-        if hasattr(record, 'operation') and record.operation != 'unknown':
+        if record_dict['operation'] != 'unknown':
             base_format = "[{timestamp}] [{levelname}] [{component}:{operation}] {message}"
+        else:
+            base_format = "[{timestamp}] [{levelname}] [{component}] {message}"
         
         # Add extra fields if present
         extra_fields = []
-        for key, value in record.__dict__.items():
-            if key not in ['name', 'msg', 'args', 'levelname', 'levelno', 'pathname', 
-                          'filename', 'module', 'exc_info', 'exc_text', 'stack_info',
-                          'lineno', 'funcName', 'created', 'msecs', 'relativeCreated',
-                          'thread', 'threadName', 'processName', 'process', 'getMessage',
-                          'timestamp', 'component', 'operation', 'message']:
-                if not key.startswith('_'):
-                    extra_fields.append(f"{key}={value}")
+        for key, value in record_dict.items():
+            if (key not in self.STANDARD_ATTRS and 
+                not key.startswith('_') and 
+                key not in ['timestamp', 'component', 'operation', 'message']):
+                extra_fields.append(f"{key}={value}")
         
         if extra_fields:
             base_format += " | " + " | ".join(extra_fields)
         
-        return base_format.format(**record.__dict__)
+        # Handle exception information if present
+        if record.exc_info and not record.exc_text:
+            # Format the exception and add it to the message
+            record.exc_text = self.formatException(record.exc_info)
+        
+        if record.exc_text:
+            base_format += "\n" + record.exc_text
+        
+        if record.stack_info:
+            base_format += "\n" + self.formatStack(record.stack_info)
+        
+        return base_format.format(**record_dict)
 
 
 class ComponentLogger:
@@ -64,13 +88,31 @@ class ComponentLogger:
         self.logger = logging.getLogger(f"kotlin_test_gen.{component_name}")
         
     def _log(self, level: int, message: str, operation: str = None, **kwargs) -> None:
-        """Internal logging method."""
-        extra = {
-            'component': self.component_name,
-            'operation': operation or 'general',
-            **kwargs
-        }
-        self.logger.log(level, message, extra=extra)
+        """
+        Internal logging method with proper exc_info handling.
+        
+        Args:
+            level: Logging level (e.g., logging.INFO, logging.ERROR)
+            message: The log message
+            operation: Optional operation name for context
+            **kwargs: Additional fields to include in the log record
+        """
+        # Extract exc_info if present to handle it specially
+        exc_info = kwargs.pop('exc_info', None)
+        stack_info = kwargs.pop('stack_info', None)
+        
+        # Prepare extra fields, excluding any standard logging attributes
+        extra = {}
+        for key, value in kwargs.items():
+            if key not in logging.LogRecord('', 0, '', 0, '', (), None).__dict__:
+                extra[key] = value
+        
+        # Add our standard fields
+        extra['component'] = self.component_name
+        extra['operation'] = operation or 'general'
+        
+        # Log with the prepared extra fields and handle exc_info/stack_info specially
+        self.logger.log(level, message, extra=extra, exc_info=exc_info, stack_info=stack_info)
     
     def info(self, message: str, operation: str = None, **kwargs) -> None:
         """Log info message."""
@@ -81,7 +123,14 @@ class ComponentLogger:
         self._log(logging.WARNING, message, operation, **kwargs)
     
     def error(self, message: str, operation: str = None, **kwargs) -> None:
-        """Log error message."""
+        """
+        Log error message with optional exception information.
+        
+        Args:
+            message: The error message
+            operation: Optional operation name for context
+            **kwargs: Additional fields or exc_info for exception details
+        """
         self._log(logging.ERROR, message, operation, **kwargs)
     
     def debug(self, message: str, operation: str = None, **kwargs) -> None:
@@ -89,7 +138,7 @@ class ComponentLogger:
         self._log(logging.DEBUG, message, operation, **kwargs)
     
     def critical(self, message: str, operation: str = None, **kwargs) -> None:
-        """Log critical message."""
+        """Log critical message with optional exception information."""
         self._log(logging.CRITICAL, message, operation, **kwargs)
 
 

@@ -4,9 +4,11 @@ Handles environment variables, model settings, and system parameters.
 """
 
 import os
-from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from dataclasses import dataclass, field
+from typing import Optional, Dict, Any, List
 from pathlib import Path
+
+from .langchain_config import LangChainConfig, default_config as default_langchain_config
 
 
 @dataclass
@@ -18,6 +20,10 @@ class ModelConfig:
     llm_model_name: str = "codellama:instruct"
     llm_temperature: float = 0.1
     llm_top_p: float = 0.8
+    
+    # LangChain Configuration
+    use_langchain: bool = True
+    langchain_provider: str = "langchain_ollama"
     
     # Embedding Configuration
     embedding_model_name: str = "microsoft/codebert-base"
@@ -65,6 +71,7 @@ class ProcessingConfig:
     enable_progress_tracking: bool = True
 
 
+@dataclass
 class Config:
     """Main configuration class that aggregates all configuration objects."""
     
@@ -72,15 +79,39 @@ class Config:
         self.model = ModelConfig()
         self.directories = DirectoryConfig()
         self.processing = ProcessingConfig()
+        self.langchain = default_langchain_config
         self._load_from_environment()
     
     def _load_from_environment(self) -> None:
         """Load configuration from environment variables."""
         
-        # Model configuration from environment
-        self.model.ollama_api_url = os.getenv("OLLAMA_API_URL", self.model.ollama_api_url)
-        self.model.llm_model_name = os.getenv("MODEL_NAME", self.model.llm_model_name)
-        self.model.embedding_model_name = os.getenv("EMBEDDING_MODEL", self.model.embedding_model_name)
+        # LLM Configuration
+        if os.getenv("OLLAMA_API_URL"):
+            self.model.ollama_api_url = os.getenv("OLLAMA_API_URL")
+        if os.getenv("LLM_MODEL_NAME"):
+            self.model.llm_model_name = os.getenv("LLM_MODEL_NAME")
+        if os.getenv("LLM_TEMPERATURE"):
+            self.model.llm_temperature = float(os.getenv("LLM_TEMPERATURE"))
+        if os.getenv("LLM_TOP_P"):
+            self.model.llm_top_p = float(os.getenv("LLM_TOP_P"))
+            
+        # LangChain Configuration
+        if os.getenv("USE_LANGCHAIN") is not None:
+            self.model.use_langchain = os.getenv("USE_LANGCHAIN").lower() in ("true", "1", "t")
+        if os.getenv("LANGCHAIN_PROVIDER"):
+            self.model.langchain_provider = os.getenv("LANGCHAIN_PROVIDER")
+            
+        # Update LangChain config from environment
+        if os.getenv("LANGCHAIN_MODEL_NAME"):
+            self.langchain.ollama.model_name = os.getenv("LANGCHAIN_MODEL_NAME")
+        if os.getenv("LANGCHAIN_TEMPERATURE"):
+            self.langchain.ollama.temperature = float(os.getenv("LANGCHAIN_TEMPERATURE"))
+        if os.getenv("LANGCHAIN_MAX_TOKENS"):
+            self.langchain.ollama.max_tokens = int(os.getenv("LANGCHAIN_MAX_TOKENS"))
+        if os.getenv("LANGCHAIN_TOP_P"):
+            self.langchain.ollama.top_p = float(os.getenv("LANGCHAIN_TOP_P"))
+        if os.getenv("LANGCHAIN_BASE_URL"):
+            self.langchain.ollama.base_url = os.getenv("LANGCHAIN_BASE_URL")
         
         # Temperature and other model parameters
         if temp := os.getenv("LLM_TEMPERATURE"):

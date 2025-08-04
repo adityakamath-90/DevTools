@@ -99,7 +99,7 @@ class PromptBuilder(IPromptBuilder):
             template = self._templates['accuracy']
             prompt = template.template.format(
                 class_code=kotlin_class.source_code,
-                generated_test=generated_test
+                test_code=generated_test  # Changed from generated_test to test_code to match template
             )
             return prompt
         except Exception as e:

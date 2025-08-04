@@ -293,42 +293,138 @@ class KotlinTestGenerator(TestGenerator):
             return []
     
     def _generate_test_code(self, kotlin_class: KotlinClass, similar_tests: List[str]) -> str:
-        """Generate test code using AI."""
-        try:
-            prompt = self.prompt_builder.build_generation_prompt(kotlin_class, similar_tests)
+        """
+        Generate test code using AI with the configured LLM provider.
+        
+        This method:
+        1. Builds a generation prompt using the prompt builder
+        2. Sends the prompt to the LLM for test generation
+        3. Cleans the generated code
+        4. Optionally validates and improves the test code
+        
+        Args:
+            kotlin_class: The Kotlin class to generate tests for
+            similar_tests: List of similar test cases for context
             
-            # Generate with LLM
-            result = self.llm_provider.generate(
-                prompt,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens
+        Returns:
+            str: Generated test code, or empty string on failure
+        """
+        self.logger.info(f"Generating test code for class: {kotlin_class.name}")
+        
+        try:
+            # Build the generation prompt with class and similar tests
+            prompt = self.prompt_builder.build_generation_prompt(
+                kotlin_class=kotlin_class, 
+                similar_tests=similar_tests
             )
             
-            return result
+            self.logger.debug(f"Generated prompt with {len(prompt)} characters")
+            
+            # Generate test code with the LLM
+            response = self.llm_provider.generate(
+                prompt=prompt,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                top_p=0.95,  # Slightly higher for more creative generation
+                frequency_penalty=0.1,
+                presence_penalty=0.1
+            )
+            
+            # Extract the generated text from the response
+            generated_code = response.text if hasattr(response, 'text') else str(response)
+            
+            if not generated_code or not generated_code.strip():
+                self.logger.error("Received empty response from LLM during test generation")
+                return ""
+            
+            # Clean up the generated code
+            cleaned_code = self._clean_generated_code(generated_code)
+            
+            if not cleaned_code:
+                self.logger.error("Failed to clean generated test code")
+                return ""
+                
+            self.logger.info(f"Generated test code for class: {kotlin_class.name}: {cleaned_code}")
+            
+            # If validation is enabled, validate and improve the test code
+            if self.config.enable_validation:
+                improved_code = self._validate_and_improve_test(kotlin_class, cleaned_code)
+                if improved_code:
+                    self.logger.info(f"Successfully improved test code for class: {kotlin_class.name}")
+                    return improved_code
+            
+            return cleaned_code
             
         except Exception as e:
-            self.logger.error(f"Error generating test code: {e}")
+            self.logger.error(f"Error generating test code: {str(e)}", exc_info=True)
             return ""
     
     def _validate_and_improve_test(self, kotlin_class: KotlinClass, test_code: str) -> Optional[str]:
-        """Validate and improve the generated test code."""
+        """
+        Validate and improve the generated test code using the configured LLM provider.
+        
+        This method performs the following steps:
+        1. Checks if validation is enabled in the config
+        2. Builds a validation prompt using the prompt builder
+        3. Sends the prompt to the LLM for improvement suggestions
+        4. Cleans and returns the improved test code
+        
+        Args:
+            kotlin_class: The Kotlin class being tested
+            test_code: The generated test code to validate and improve
+            
+        Returns:
+            Optional[str]: Improved test code if validation is successful, None otherwise
+        """
         if not self.config.enable_validation:
+            self.logger.debug("Test validation is disabled in config")
             return None
 
+        if not test_code or not test_code.strip():
+            self.logger.warning("Empty or invalid test code provided for validation")
+            return None
+
+        self.logger.info(f"Validating and improving test for class: {kotlin_class.name}")
+        
         try:
-            # Ensure the variable name matches the template: pass as 'test_code'
-            validation_prompt = self.prompt_builder.build_validation_prompt(kotlin_class, test_code=test_code)
-
-            improved_code = self.llm_provider.generate(
-                validation_prompt,
-                temperature=0.1,  # Lower temperature for validation
-                max_tokens=self.config.max_tokens
+            # Build the validation prompt using the prompt builder
+            validation_prompt = self.prompt_builder.build_validation_prompt(
+                kotlin_class=kotlin_class,
+                generated_test=test_code
             )
-
-            return improved_code
-
+            
+            self.logger.debug(f"Generated validation prompt with {len(validation_prompt)} characters")
+            
+            # Generate improved test code with lower temperature for more deterministic results
+            response = self.llm_provider.generate(
+                prompt=validation_prompt,
+                temperature=0.1,  # Lower temperature for more focused, deterministic output
+                max_tokens=self.config.max_tokens,
+                top_p=0.9,  # Focus on high-probability tokens
+                top_k=40,   # Limit to top-k most likely next tokens
+                frequency_penalty=0.2,  # Slightly penalize repetition
+                presence_penalty=0.1    # Encourage model to make use of all provided context
+            )
+            
+            # Extract the improved code from the response
+            improved_code = response.text if hasattr(response, 'text') else str(response)
+            
+            if not improved_code or not improved_code.strip():
+                self.logger.warning("Received empty response from LLM during validation")
+                return None
+                
+            # Clean up the generated code
+            cleaned_code = self._clean_generated_code(improved_code)
+            
+            if not cleaned_code or cleaned_code == test_code:
+                self.logger.info("No improvements made during validation")
+                return None
+                
+            self.logger.info(f"Successfully improved test for class: {kotlin_class.name}")
+            return cleaned_code
+            
         except Exception as e:
-            self.logger.warning(f"Error validating test code: {e}")
+            self.logger.error(f"Error during test validation: {str(e)}", exc_info=True)
             return None
     
     def _clean_generated_code(self, generated_code: str) -> str:
@@ -357,24 +453,70 @@ class KotlinTestGenerator(TestGenerator):
         return code
     
     def _save_test_file(self, kotlin_class: KotlinClass, test_code: str) -> str:
-        """Save the generated test code to a file."""
+        """
+        Save the generated test code to a file with proper error handling and logging.
+        
+        Args:
+            kotlin_class: The Kotlin class being tested
+            test_code: The test code to save
+            
+        Returns:
+            str: Path to the saved test file
+            
+        Raises:
+            IOError: If there's an error writing the file
+            ValueError: If the test code is empty or invalid
+        """
+        if not test_code or not test_code.strip():
+            error_msg = "Cannot save empty or invalid test code"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+            
         test_filename = f"{kotlin_class.name}Test.kt"
         test_file_path = os.path.join(self.config.output_dir, test_filename)
+        
+        self.logger.info(f"Saving test file to: {test_file_path}")
         
         try:
             # Ensure output directory exists
             os.makedirs(os.path.dirname(test_file_path), exist_ok=True)
             
-            # Write test file
-            with open(test_file_path, 'w', encoding='utf-8') as f:
+            # Write test file with atomic write to prevent partial writes
+            temp_file_path = f"{test_file_path}.tmp"
+            with open(temp_file_path, 'w', encoding='utf-8') as f:
                 f.write(test_code)
             
-            self.logger.info(f"Generated test file: {test_file_path}")
+            # Atomic rename to prevent race conditions
+            if os.path.exists(test_file_path):
+                backup_path = f"{test_file_path}.bak"
+                os.replace(test_file_path, backup_path)
+                self.logger.debug(f"Created backup of existing test file at: {backup_path}")
+            
+            os.replace(temp_file_path, test_file_path)
+            
+            # Verify the file was written correctly
+            if not os.path.exists(test_file_path):
+                error_msg = f"Failed to verify test file creation: {test_file_path}"
+                self.logger.error(error_msg)
+                raise IOError(error_msg)
+                
+            file_size = os.path.getsize(test_file_path)
+            self.logger.info(
+                f"Successfully saved test file: {test_file_path} "
+                f"({file_size} bytes)"
+            )
+            
             return test_file_path
             
+        except IOError as e:
+            error_msg = f"I/O error while saving test file {test_file_path}: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            raise IOError(error_msg) from e
+            
         except Exception as e:
-            self.logger.error(f"Error saving test file: {e}")
-            raise
+            error_msg = f"Unexpected error while saving test file {test_file_path}: {str(e)}"
+            self.logger.error(error_msg, exc_info=True)
+            raise IOError(error_msg) from e
 
 
 # Legacy compatibility class for backward compatibility

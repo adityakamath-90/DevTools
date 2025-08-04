@@ -101,12 +101,51 @@ class EmbeddingVector:
 
 @dataclass
 class ModelMetrics:
+    """Tracks metrics for LLM model usage and performance."""
     model_name: str
+    total_requests: int = 0
+    successful_requests: int = 0
+    failed_requests: int = 0
+    total_tokens: int = 0
+    total_response_time: float = 0.0
     accuracy: Optional[float] = None
     precision: Optional[float] = None
     recall: Optional[float] = None
     f1_score: Optional[float] = None
     additional_info: Optional[dict] = None
+    
+    def update_metrics(self, response_time: float, success: bool, tokens_used: Optional[int] = None):
+        """Update metrics based on a request's outcome.
+        
+        Args:
+            response_time: Time taken for the request in seconds
+            success: Whether the request was successful
+            tokens_used: Number of tokens used in the request (optional)
+        """
+        self.total_requests += 1
+        if success:
+            self.successful_requests += 1
+        else:
+            self.failed_requests += 1
+            
+        self.total_response_time += response_time
+        
+        if tokens_used is not None:
+            self.total_tokens += tokens_used
+    
+    @property
+    def average_response_time(self) -> float:
+        """Calculate the average response time in seconds."""
+        if self.total_requests == 0:
+            return 0.0
+        return self.total_response_time / self.total_requests
+    
+    @property
+    def success_rate(self) -> float:
+        """Calculate the success rate as a percentage."""
+        if self.total_requests == 0:
+            return 0.0
+        return (self.successful_requests / self.total_requests) * 100.0
 
 @dataclass
 class TestCase:
@@ -147,7 +186,7 @@ class TestGenerationSummary:
     passed: int
     failed: int
     skipped: int = 0
-    details: Optional[List[TestCase]] = None
+    details: Optional[List[TestCase]] = None    
 
 @dataclass
 class ErrorInfo:
@@ -188,8 +227,21 @@ DEFAULT_GENERATION_TEMPLATE = PromptTemplate(
 DEFAULT_ACCURACY_TEMPLATE = PromptTemplate(
     name="default_accuracy",
     template=(
-        "Check if the following test covers all public methods of the class:\nClass:\n{class_code}\nTest:\n{test_code}\n"
+        "You are a senior Android Kotlin developer. Review and improve the following test case for the given class. "
+        "Your task is to ensure the test is comprehensive, follows best practices, and properly tests the class functionality.\n\n"
+        "Class to test:\n```kotlin\n{class_code}\n```\n\n"
+        "Current test implementation:\n```kotlin\n{test_code}\n```\n\n"
+        "Please analyze the test and provide an improved version that:\n"
+        "1. Covers all public methods and edge cases\n"
+        "2. Follows the Arrange-Act-Assert pattern\n"
+        "3. Uses appropriate assertions (assertEquals, assertTrue, assertFailsWith, etc.)\n"
+        "4. Includes proper test setup and teardown if needed\n"
+        "5. Has clear, descriptive test method names\n"
+        "6. Handles exceptions and edge cases appropriately\n"
+        "7. Follows Kotlin testing best practices\n\n"
+        "Return ONLY the improved test code, without any additional explanations or markdown formatting.\n"
+        "If the test is already well-written, return it as-is.\n"
     ),
     variables=["class_code", "test_code"],
-    description="Default template for test coverage accuracy"
+    description="Template for validating and improving Kotlin test cases"
 )
