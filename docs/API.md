@@ -15,9 +15,9 @@ This document describes the APIs and interfaces for all components in the AI-pow
 ```python
 @dataclass
 class GenerationConfig:
-    source_dir: str = "src/input-src"
+    source_dir: str = "input-src"
     test_dir: str = "output-test"
-    test_datastore_dir: str = "src/testcase--datastore"
+    test_datastore_dir: str = "testcase-datastore"
     log_level: str = "INFO"
     
     @classmethod

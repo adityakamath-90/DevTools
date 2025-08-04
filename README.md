@@ -1,45 +1,112 @@
-# AI-Powered Kotlin Test Generation System
+# 🚀 DevTools: AI-Powered Development Assistant
 
-A comprehensive system that leverages advanced semantic similarity matching and Large Language Models to automatically generate high-quality JUnit 5 test cases for Kotlin code.
+A comprehensive suite of developer tools that leverages AI to enhance software development workflows, with a focus on test generation, code documentation, and code quality.
 
-## 🔍 Project Overview
+## ✨ Key Features
 
-This system combines:
-- **🤖 AI-Powered Generation**: Uses CodeLlama via Ollama for intelligent test creation
-- **🧠 Semantic Similarity**: Leverages Microsoft CodeBERT for context-aware test patterns
-- **⚡ Fast Processing**: FAISS indexing for efficient similarity search
-- **✨ Clean Output**: Markdown-free, production-ready test code
-- **📚 Documentation Generation**: Automatic KDoc comment generation for Kotlin code
-- **🏗️ Modular Architecture**: Interface-driven design with robust configuration and logging
+- **🤖 AI-Powered Test Generation**: Generate JUnit 5 test cases for Kotlin code using CodeLlama
+- **📝 Smart Documentation**: Automatic KDoc comment generation
+- **🔍 Semantic Search**: Find relevant test patterns using CodeBERT embeddings
+- **⚡ Fast & Efficient**: Optimized with FAISS for quick similarity searches
+- **🧩 Modular Design**: Clean, maintainable architecture with clear separation of concerns
 
-## 🏗️ System Architecture
-
-### New Modular Architecture (v2.0)
-
-The system has been completely redesigned with a modular, production-ready architecture:
-
-#### Core Modules
-- **`src/core/`**: Core business logic (test generation, code parsing, prompt building)
-- **`src/services/`**: Service layer (LLM, embedding, KDoc services)
-- **`src/interfaces/`**: Abstract base classes and interfaces
-- **`src/models/`**: Data models and result objects
-- **`src/config/`**: Configuration management with environment overrides
-- **`src/utils/`**: Utilities (logging, helpers)
-
-#### Key Components
-1. **KotlinTestGenerator** (core): Main orchestrator with enhanced error handling
-2. **EmbeddingIndexerService** (services): Semantic similarity with fallback mechanisms
-3. **LLMService** (services): Interface to Ollama/CodeLlama with robust error handling
-4. **PromptBuilderService** (core): Context-aware prompt construction
-5. **KDocService** (services): Automatic KDoc comment generation
-
-### Data Flow
+## 🏗️ Project Structure
 
 ```
-Kotlin Source Files → Core Parser → Service Layer → LLM Generation → Test Files
-                                        ↓
-                            Embedding Service (FAISS Index + Fallback)
+DevTools/
+├── src/                    # Source code
+│   ├── core/              # Core business logic
+│   ├── services/          # Service implementations
+│   ├── interfaces/        # Abstract interfaces
+│   ├── models/            # Data models
+│   ├── config/            # Configuration
+│   └── utils/             # Utility functions
+├── docs/                  # Documentation
+├── validation-system/     # Test validation
+└── tests/                 # Test files
 ```
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.9+
+- Ollama with CodeLlama model
+- Java Development Kit (JDK) 11+
+- Gradle 7.0+
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/DevTools.git
+   cd DevTools
+   ```
+
+2. **Set up Python environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+3. **Set up Ollama**:
+   ```bash
+   # Install Ollama if not present
+   curl -fsSL https://ollama.com/install.sh | sh
+   
+   # Download CodeLlama model
+   ollama pull codellama:instruct
+   ```
+
+## 🛠️ Usage
+
+### Generate Tests
+
+```bash
+# Generate tests for all Kotlin files in src/input-src/
+python main.py generate-tests
+
+# Generate tests for a specific file
+python main.py generate-tests --source-file path/to/YourFile.kt
+```
+
+### Generate Documentation
+
+```bash
+# Generate KDoc comments
+python main.py generate-kdoc
+```
+
+### Run Validations
+
+```bash
+# Run all validations
+cd validation-system
+./scripts/validate_all.sh
+```
+
+## 📚 Documentation
+
+For detailed documentation, see the [docs](docs/) directory:
+- [API Documentation](docs/API.md)
+- [Architecture Overview](docs/ARCHITECTURE.md)
+- [Validation Guide](validation-system/docs/RUNTIME_VALIDATION_GUIDE.md)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [Ollama](https://ollama.ai/) for the local LLM infrastructure
+- [CodeLlama](https://ai.meta.com/llama/) for the base AI model
+- [FAISS](https://faiss.ai/) for efficient similarity search
+- All our amazing contributors
 
 ## 🚀 Quick Start
 

@@ -34,9 +34,9 @@ class ModelConfig:
 class DirectoryConfig:
     """Configuration for input/output directories."""
     
-    input_dir: str = "src/input-src"
+    input_dir: str = "input-src"
     output_dir: str = "output-test"
-    reference_tests_dir: str = "src/testcase--datastore"
+    reference_tests_dir: str = "testcase-datastore"
     backup_dir: str = "backups"
     docs_dir: str = "docs"
     
@@ -186,7 +186,7 @@ class EmbeddingConfig:
     """Configuration for embedding service."""
     
     model_name: str = "microsoft/codebert-base"
-    test_cases_dir: str = "src/testcase--datastore" 
+    test_cases_dir: str = "src/testcase-datastore" 
     max_length: int = 512
     batch_size: int = 8
     

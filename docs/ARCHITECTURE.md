@@ -380,7 +380,7 @@ DevTools/
 ├── src/
 │   ├── input-src/          # Input Kotlin files
 │   ├── output-test/        # Generated test files
-│   ├── testcase--datastore/# Existing tests for reference
+│   ├── testcase-datastore/# Existing tests for reference
 │   └── *.py               # Core modules
 ├── cache/
 │   ├── embeddings/        # Cached embeddings

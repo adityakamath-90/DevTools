@@ -7,6 +7,7 @@ new and legacy interfaces for generating Kotlin tests and KDoc comments.
 """
 
 import os
+os.environ["ALLOW_MODEL_DOWNLOAD"] = "true"
 import sys
 import argparse
 from pathlib import Path
