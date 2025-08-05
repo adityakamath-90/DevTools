@@ -86,6 +86,79 @@ class GenAIApplication:
             self.logger.error(f"Failed to initialize services: {e}")
             raise
     
+    def improve_tests_with_feedback(
+        self, 
+        source_code: str, 
+        generated_test_code: str, 
+        user_feedback: str,
+        output_dir: Optional[str] = None
+    ) -> str:
+        """
+        Improve generated tests based on user feedback.
+        
+        Args:
+            source_code: The original Kotlin source code
+            generated_test_code: Previously generated test code
+            user_feedback: User feedback for improving the tests
+            output_dir: Directory to save improved test files
+            
+        Returns:
+            str: Improved test code
+        """
+        self.logger.info("Improving tests based on user feedback...")
+        output_dir = output_dir or self.config.output_dir
+        
+        try:
+            # Create a prompt that includes the feedback and previous test code
+            prompt = f"""
+            Please improve the following test code based on the user feedback.
+            
+            Original Kotlin code:
+            ```kotlin
+            {source_code}
+            ```
+            
+            Generated test code (to be improved):
+            ```kotlin
+            {generated_test_code}
+            ```
+            
+            User feedback: {user_feedback}
+            
+            Please generate an improved version of the test code that addresses the feedback.
+            Focus on:
+            1. Addressing the specific feedback provided
+            2. Maintaining or improving test coverage
+            3. Following Kotlin testing best practices
+            4. Adding more assertions if needed
+            
+            Return only the improved test code, without any additional explanation or markdown formatting.
+            """
+            
+            # Generate improved test code
+            response = self.llm_service.generate(
+                prompt,
+                max_tokens=2000,
+                temperature=0.3  # Lower temperature for more focused improvements
+            )
+            
+            # Extract the text from the LLMResponse object
+            improved_test = response.text if hasattr(response, 'text') and response.text else generated_test_code
+            
+            # Save the improved test to a file
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+                test_file = os.path.join(output_dir, 'ImprovedTest.kt')
+                with open(test_file, 'w', encoding='utf-8') as f:
+                    f.write(improved_test)
+                self.logger.info(f"Saved improved test to {test_file}")
+            
+            return improved_test
+            
+        except Exception as e:
+            self.logger.error(f"Error improving tests with feedback: {e}")
+            raise
+    
     def generate_tests(self, source_dir: Optional[str] = None) -> bool:
         """
         Generate tests for Kotlin source files.
@@ -221,10 +294,36 @@ def main():
     
     parser.add_argument(
         'command',
-        choices=['test', 'kdoc', 'health', 'metrics'],
-        help='Command to execute'
+        choices=['test', 'kdoc', 'health', 'metrics', 'improve'],
+        help='''Command to execute:
+        test - Generate tests for Kotlin files
+        kdoc - Generate KDoc documentation
+        health - Check service health
+        metrics - Get performance metrics
+        improve - Improve existing tests with feedback
+        '''
     )
     
+    # Feedback improvement arguments
+    feedback_group = parser.add_argument_group('Feedback Improvement')
+    feedback_group.add_argument(
+        '--source-file',
+        help='Path to the source Kotlin file (for improve command)'
+    )
+    feedback_group.add_argument(
+        '--test-file',
+        help='Path to the generated test file to improve (for improve command)'
+    )
+    feedback_group.add_argument(
+        '--feedback',
+        help='User feedback for improving the tests (for improve command)'
+    )
+    feedback_group.add_argument(
+        '--output-file',
+        help='Path to save the improved test file (default: overwrites test-file)'
+    )
+    
+    # Common arguments
     parser.add_argument(
         '--source-dir',
         default='input-src',
@@ -262,28 +361,63 @@ def main():
         # Initialize application
         app = GenAIApplication(config)
         
-        # Execute command
+        # Execute the requested command
         if args.command == 'test':
-            success = app.generate_tests()
+            success = app.generate_tests(args.source_dir)
             sys.exit(0 if success else 1)
-        
+            
         elif args.command == 'kdoc':
-            success = app.generate_kdoc()
+            success = app.generate_kdoc(args.source_dir)
             sys.exit(0 if success else 1)
-        
+            
         elif args.command == 'health':
             healthy = app.check_health()
             sys.exit(0 if healthy else 1)
-        
+            
         elif args.command == 'metrics':
             metrics = app.get_metrics()
-            print("Performance Metrics:")
-            for service, data in metrics.items():
-                print(f"\n{service.title()}:")
-                for key, value in data.items():
-                    print(f"  {key}: {value}")
+            print("\nPerformance Metrics:")
+            print("-" * 40)
+            print(json.dumps(metrics, indent=2))
             sys.exit(0)
-    
+            
+        elif args.command == 'improve':
+            if not all([args.source_file, args.test_file, args.feedback]):
+                print("Error: --source-file, --test-file, and --feedback are required for the improve command")
+                parser.print_help()
+                sys.exit(1)
+                
+            try:
+                # Read source and test code
+                with open(args.source_file, 'r') as f:
+                    source_code = f.read()
+                    
+                with open(args.test_file, 'r') as f:
+                    test_code = f.read()
+                    
+                # Generate improved test code
+                output_file = args.output_file or args.test_file
+                improved_test = app.improve_tests_with_feedback(
+                    source_code=source_code,
+                    generated_test_code=test_code,
+                    user_feedback=args.feedback,
+                    output_dir=os.path.dirname(output_file) or None
+                )
+                
+                # Save the improved test
+                with open(output_file, 'w') as f:
+                    f.write(improved_test)
+                    
+                print(f"✅ Successfully improved test code saved to: {output_file}")
+                sys.exit(0)
+                
+            except FileNotFoundError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+            except Exception as e:
+                print(f"Error improving test: {e}")
+                sys.exit(1)
+                
     except KeyboardInterrupt:
         print("\nOperation cancelled by user")
         sys.exit(1)

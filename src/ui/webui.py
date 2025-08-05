@@ -73,7 +73,7 @@ def run_test_generation(kotlin_code: str) -> str:
                     capture_output=True,
                     text=True,
                     cwd=project_root,
-                    timeout=300  # 5 minute timeout
+                    timeout=600  # 10 minute timeout
                 )
                 log("Command execution completed")
                 log(f"Return code: {result.returncode}")
@@ -121,53 +121,130 @@ def run_test_generation(kotlin_code: str) -> str:
         log(error_msg)
         return f"{error_msg}\n\nDebug Output:\n" + "\n".join(debug_output)
 
+def improve_test_with_feedback(original_code: str, test_code: str, feedback: str) -> str:
+    """
+    Generate improved test code using the provided feedback by leveraging the GenAIApplication.
+    
+    Args:
+        original_code: The original Kotlin source code
+        test_code: The generated test code
+        feedback: User feedback for improvement
+        
+    Returns:
+        Improved test code
+    """
+    debug_output = []
+    
+    def log(msg):
+        debug_output.append(msg)
+        print(msg)  # Also print to console for debugging
+    
+    log("Starting test improvement with feedback...")
+    log(f"Feedback received: {feedback}")
+    
+    try:
+        # Import the application class
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(0, project_root)
+        from main import GenAIApplication
+        
+        # Initialize the application
+        log("Initializing GenAIApplication...")
+        app = GenAIApplication()
+        
+        # Use the application's method to improve tests with feedback
+        log("Generating improved tests with feedback...")
+        response = app.improve_tests_with_feedback(
+            source_code=original_code,
+            generated_test_code=test_code,
+            user_feedback=feedback,
+            output_dir=os.path.join(tempfile.gettempdir(), 'improved_tests')
+        )
+        
+        # Extract the text from the LLMResponse object
+        improved_test = response.text if hasattr(response, 'text') and response.text else test_code
+        
+        log("Successfully generated improved test code")
+        return improved_test
+        
+    except Exception as e:
+        error_msg = f"Error in improve_test_with_feedback: {str(e)}"
+        log(error_msg)
+        return test_code  # Return original if error occurs
+
 def main():
     st.title("🧪 Kotlin Test Generator")
     st.markdown("Upload a Kotlin file or paste the code to generate unit tests")
+    
+    # Initialize session state variables
+    if 'kotlin_code' not in st.session_state:
+        st.session_state.kotlin_code = ""
+    if 'test_output' not in st.session_state:
+        st.session_state.test_output = ""
+    if 'show_feedback' not in st.session_state:
+        st.session_state.show_feedback = False
     
     # File uploader
     uploaded_file = st.file_uploader("Upload Kotlin file", type=["kt"])
     
     # Text area for direct code input
-    code_input = st.text_area("Or paste Kotlin code here", height=300)
+    code_input = st.text_area("Or paste Kotlin code here", height=300, key="code_input")
     
-    kotlin_code = ""
+    # Get the Kotlin code
     if uploaded_file is not None:
-        kotlin_code = uploaded_file.getvalue().decode("utf-8")
+        st.session_state.kotlin_code = uploaded_file.getvalue().decode("utf-8")
     elif code_input:
-        kotlin_code = code_input
+        st.session_state.kotlin_code = code_input
     
     # Display the input code
-    if kotlin_code:
+    if st.session_state.kotlin_code:
         with st.expander("Input Code", expanded=True):
-            st.code(kotlin_code, language="kotlin")
+            st.code(st.session_state.kotlin_code, language="kotlin")
     
     # Generate tests button
-    if st.button("Generate Tests", type="primary") and kotlin_code:
+    if st.button("Generate Tests", type="primary") and st.session_state.kotlin_code:
         with st.spinner("Generating tests..."):
-            test_output = run_test_generation(kotlin_code)
-            
-            # Display test output
-            st.subheader("Generated Test Code")
-            st.code(test_output, language="kotlin")
-            
-            # Download button for the test file
-            st.download_button(
-                label="Download Test File",
-                data=test_output,
-                file_name="GeneratedTest.kt",
-                mime="text/x-kotlin"
-            )
-            
-            # Feedback section
+            st.session_state.test_output = run_test_generation(st.session_state.kotlin_code)
+            st.session_state.show_feedback = True
+            st.rerun()
+    
+    # Display test output if available
+    if st.session_state.test_output:
+        st.subheader("Generated Test Code")
+        st.code(st.session_state.test_output, language="kotlin")
+        
+        # Download button for the test file
+        st.download_button(
+            label="Download Test File",
+            data=st.session_state.test_output,
+            file_name="GeneratedTest.kt",
+            mime="text/x-kotlin"
+        )
+        
+        # Feedback section
+        if st.session_state.show_feedback:
             st.subheader("Feedback")
-            feedback = st.text_area("Provide feedback to improve the test generation", height=100)
+            feedback = st.text_area(
+                "Provide feedback to improve the test generation", 
+                height=100,
+                key="feedback_input"
+            )
             
             if st.button("Submit Feedback"):
                 if feedback:
-                    # Here you would typically send the feedback to your feedback system
-                    st.success("Thank you for your feedback! We'll use it to improve the test generation.")
-                    # TODO: Implement feedback submission logic
+                    with st.spinner("Improving tests based on your feedback..."):
+                        # Generate improved test code using the feedback
+                        improved_test = improve_test_with_feedback(
+                            st.session_state.kotlin_code,
+                            st.session_state.test_output,
+                            feedback
+                        )
+                        
+                        # Update the test output with the improved version
+                        st.session_state.test_output = improved_test
+                        st.session_state.show_feedback = False  # Reset feedback state
+                        st.success("Test code has been improved based on your feedback!")
+                        st.rerun()
                 else:
                     st.warning("Please provide some feedback before submitting")
 
