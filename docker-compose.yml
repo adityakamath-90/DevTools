@@ -1,0 +1,46 @@
+version: '3.8'
+
+volumes:
+  testcase-datastore:
+  ollama_models:
+
+services:
+  kotlin-test-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - PYTHON_VERSION=3.9
+    ports:
+      - "8501:8501"  # Streamlit
+      - "11434:11434"  # Ollama
+    volumes:
+      - .:/app
+      - testcase-datastore:/app/testcase-datastore
+      - ollama_models:/root/.ollama
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ~/.cache/torch:/root/.cache/torch
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - TESTCASE_DATASTORE=/app/testcase-datastore
+      - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5m  # Give Ollama time to download models
+    # GPU support is disabled - uncomment to enable
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    # Uncomment the following if you want to use CPU instead of GPU
+    # environment:
+    #   - CUDA_VISIBLE_DEVICES=""
+    #   - TF_CPP_MIN_LOG_LEVEL=3

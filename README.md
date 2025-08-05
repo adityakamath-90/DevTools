@@ -30,12 +30,59 @@ DevTools/
 
 ### Prerequisites
 
-- Python 3.9+
-- Ollama with CodeLlama model
-- Java Development Kit (JDK) 11+
-- Gradle 7.0+
+- Docker 20.10+ and Docker Compose (recommended)
+- OR Python 3.9+ with Ollama and CodeLlama model
+- Java Development Kit (JDK) 11+ (for local development)
+- Gradle 7.0+ (for local development)
 
-### Installation
+### 🐳 Docker Installation (Recommended)
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/DevTools.git
+   cd DevTools
+   ```
+
+2. **Build and start the container**:
+   ```bash
+   # For CPU (slower but works everywhere)
+   docker-compose up --build
+   
+   # For GPU (faster, requires NVIDIA Container Toolkit)
+   # docker-compose --profile gpu up --build
+   ```
+   This will create a persistent volume for the `testcase-datastore` that will survive container restarts.
+
+3. **Access the Web UI**:
+   Open your browser to http://localhost:8501
+
+### 🔄 Managing Testcase Datastore
+
+The application uses a `testcase-datastore` volume to store and retrieve similar test cases. This volume is automatically created and managed by Docker.
+
+#### View Datastore Contents
+```bash
+# List files in the datastore
+docker run --rm -v kotlin-test-generator-datastore:/datastore alpine ls -la /datastore
+```
+
+#### Backup Datastore
+```bash
+docker run --rm -v kotlin-test-generator-datastore:/source -v $(pwd):/backup alpine tar czf /backup/testcase-datastore-backup-$(date +%Y%m%d).tar.gz -C /source .
+```
+
+#### Restore Datastore
+```bash
+# First stop the running containers
+docker-compose down
+
+# Restore from backup
+docker run --rm -v kotlin-test-generator-datastore:/target -v $(pwd):/backup alpine sh -c "cd /target && tar xzf /backup/your-backup-file.tar.gz"
+
+# Restart the containers
+docker-compose up -d
+
+### 🖥️ Local Installation
 
 1. **Clone the repository**:
    ```bash
@@ -48,6 +95,7 @@ DevTools/
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    pip install -r requirements.txt
+   ```
    ```
 
 3. **Set up Ollama**:
@@ -197,6 +245,35 @@ The system supports flexible configuration through:
 - **Test Files**: Named as `{ClassName}Test.kt`
 - **Format**: JUnit 5 compatible Kotlin test code
 - **Dependencies**: Uses MockK for mocking when needed
+
+## 🖥️ Usage
+
+### Web UI
+After starting with Docker or locally, access the Web UI at `http://localhost:8501`
+
+### CLI Mode
+
+You can also use the tool from the command line:
+
+```bash
+# Using Docker
+docker-compose run --rm kotlin-test-generator cli test --source-dir /path/to/source --output-dir /path/to/output
+
+# Or locally
+python -m src.main test --source-dir /path/to/source --output-dir /path/to/output
+```
+
+## 🐳 Docker Development
+
+### Building the Image
+```bash
+docker build -t kotlin-test-generator .
+```
+
+### Running with Volumes for Development
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
 
 ## 🛠️ System Features
 

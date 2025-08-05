@@ -1,0 +1,26 @@
+version: '3.8'
+
+volumes:
+  testcase-datastore:
+
+services:
+  kotlin-test-generator:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+      - testcase-datastore:/app/testcase-datastore
+      - ~/.cache/huggingface:/root/.cache/huggingface
+      - ~/.cache/torch:/root/.cache/torch
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - STREAMLIT_SERVER_HEADLESS=true
+      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
+      - TESTCASE_DATASTORE=/app/testcase-datastore
+      - PYTHONPATH=/app
+      - STREAMLIT_SERVER_RUN_ON_SAVE=true
+    command: ["bash", "-c", "chmod +x /app/entrypoint.sh && /app/entrypoint.sh web"]
+    # Uncomment to enable hot-reloading for development
+    # environment:
+    #   - STREAMLIT_SERVER_RUN_ON_SAVE=true

@@ -20,7 +20,7 @@ class LangChainOllamaConfig:
     num_ctx: int = 4096
     
     # Server configuration
-    base_url: str = "http://localhost:11434"
+    base_url: str = "http://0.0.0.0:11434"  # Use 0.0.0.0 for container networking
     
     # Advanced settings
     num_gpu: int = 1  # Set to 0 for CPU-only
