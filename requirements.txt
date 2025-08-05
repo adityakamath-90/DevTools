@@ -26,12 +26,14 @@ torch==2.0.1  # Pinned for stability with transformers
 tokenizers==0.13.3
 sentencepiece==0.1.99  # Required by some models
 
+#WebUI
+streamlit>=1.24.0
+
 # Runtime dependencies
 tqdm>=4.65.0  # Progress bars
 packaging>=20.9  # Version parsing
 python-dotenv>=1.0.0  # Environment variable management
 pydantic>=1.10.7  # Data validation
-
 # Optional dependencies for enhanced functionality
 # torch[cuda]>=1.13.0  # Uncomment for CUDA support
 
