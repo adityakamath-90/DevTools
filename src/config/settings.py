@@ -180,11 +180,12 @@ class GenerationConfig:
     
     # Performance optimization flags (all disabled by default for speed)
     enable_compilation_checks: bool = False
-    enable_static_analysis: bool = False
+    enable_static_analysis: bool = True
     enable_auto_fix: bool = False
-    enable_coverage_checks: bool = False
-    enable_coverage_improvement: bool = False
+    enable_coverage_checks: bool = True
+    enable_coverage_improvement: bool = True
     max_similar_tests: int = 2
+    similarity_top_k: int = 3  # Number of similar tests to retrieve
     max_source_code_chars: int = 2000
     
     # LLM generation parameters for speed
