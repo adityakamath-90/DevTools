@@ -8,9 +8,12 @@ JUnit 5 test cases for Kotlin classes using AI and semantic similarity.
 import os
 import re
 import uuid
-from typing import List, Optional, Dict, Any, Tuple
+import time
+from typing import List, Optional, Dict, Any, Tuple, Set
 from dataclasses import dataclass
 from pathlib import Path
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from models.data_models import KotlinClass, GenerationRequest, GenerationResult, ModelMetrics, GenerationStatus, TestCase
 from interfaces.base_interfaces import TestGenerator, LLMProvider, SimilarityIndexer
@@ -21,6 +24,9 @@ from .prompt_builder import PromptBuilder
 
 logger = get_logger(__name__)
 
+# Constants for configuration
+DEFAULT_BATCH_SIZE = 4  # Number of files to process in parallel
+CACHE_SIZE = 128  # Size of LRU caches
 
 @dataclass
 class ProcessingStats:
@@ -31,13 +37,21 @@ class ProcessingStats:
     classes_found: int = 0
     tests_generated: int = 0
     total_processing_time: float = 0.0
+    cache_hits: int = 0
+    cache_misses: int = 0
     
     def success_rate(self) -> float:
         """Calculate success rate percentage."""
         if self.files_processed == 0:
             return 0.0
         return (self.files_succeeded / self.files_processed) * 100.0
-
+    
+    def cache_hit_rate(self) -> float:
+        """Calculate cache hit rate percentage."""
+        total = self.cache_hits + self.cache_misses
+        if total == 0:
+            return 0.0
+        return (self.cache_hits / total) * 100.0
 
 class KotlinTestGenerator(TestGenerator):
     """
@@ -45,12 +59,10 @@ class KotlinTestGenerator(TestGenerator):
     
     Features:
     - Advanced class detection and parsing
-    - Semantic similarity matching
-    - AI-powered test generation
-    - Quality validation and improvement
-    - Comprehensive error handling
-    - Detailed metrics and logging
-    - Fallback mechanisms
+    - Semantic similarity matching with caching
+    - Parallel test generation
+    - Memory-efficient processing
+    - Optimized file I/O
     """
     
     def __init__(
@@ -71,11 +83,139 @@ class KotlinTestGenerator(TestGenerator):
         # Processing statistics
         self.stats = ProcessingStats()
         
+        # Cache for similar tests
+        self._similar_tests_cache: Dict[str, List[str]] = {}
+        
         # Ensure output directory exists
         os.makedirs(self.config.output_dir, exist_ok=True)
         
         self.logger.info(f"Initialized KotlinTestGenerator with config: {self.config}")
     
+    @lru_cache(maxsize=CACHE_SIZE)
+    def _cached_find_similar_tests(self, source_code: str) -> List[str]:
+        """Cached version of find_similar_tests."""
+        try:
+            return self.similarity_indexer.find_similar(
+                source_code, 
+                top_k=self.config.similarity_top_k
+            )
+        except Exception as e:
+            self.logger.warning(f"Error finding similar tests: {e}")
+            return []
+    
+    def _find_similar_tests(self, kotlin_class: KotlinClass) -> List[str]:
+        """Find similar existing tests for context with caching."""
+        cache_key = f"{kotlin_class.name}:{hash(kotlin_class.source_code)}"
+        
+        if cache_key in self._similar_tests_cache:
+            self.stats.cache_hits += 1
+            return self._similar_tests_cache[cache_key]
+        
+        self.stats.cache_misses += 1
+        similar_tests = self._cached_find_similar_tests(kotlin_class.source_code)
+        self._similar_tests_cache[cache_key] = similar_tests
+        return similar_tests
+
+    def _process_single_file(self, file_path: str) -> GenerationResult:
+        """Process a single file for batch operations."""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                source_code = f.read()
+            
+            kotlin_class = KotlinClass(
+                name=self.parser.extract_class_name(source_code) or "UnknownClass",
+                source_code=source_code,
+                file_path=file_path
+            )
+            
+            output_file = os.path.join(self.config.output_dir, f"{kotlin_class.name}Test.kt")
+            
+            request = GenerationRequest(
+                request_id=str(uuid.uuid4()),
+                class_name=kotlin_class.name,
+                source_code=kotlin_class.source_code or "",
+                parameters=None
+            )
+            setattr(request, 'output_file', output_file)
+            
+            return self.generate_tests(request)
+            
+        except Exception as e:
+            self.logger.error(f"Error processing file {file_path}: {e}")
+            return GenerationResult(
+                request_id=str(uuid.uuid4()),
+                status=GenerationStatus.FAILED,
+                error_message=str(e)
+            )
+    
+    def generate_tests_for_directory(self, source_dir: str, max_workers: int = None) -> List[GenerationResult]:
+        """
+        Generate tests for all Kotlin files in a directory with parallel processing.
+        
+        Args:
+            source_dir: Directory containing Kotlin source files
+            max_workers: Maximum number of worker threads (default: min(32, os.cpu_count() + 4))
+            
+        Returns:
+            List of GenerationResult objects
+        """
+        self.logger.info(f"Starting batch test generation for directory: {source_dir}")
+        
+        if not os.path.exists(source_dir):
+            self.logger.error(f"Source directory does not exist: {source_dir}")
+            return []
+        
+        # Find all Kotlin files
+        kotlin_files = self._find_kotlin_files(source_dir)
+        self.logger.info(f"Found {len(kotlin_files)} Kotlin files to process")
+        
+        if not kotlin_files:
+            self.logger.warning(f"No Kotlin files found in {source_dir}")
+            return []
+        
+        results = []
+        start_time = time.time()
+        
+        # Apply max_files limit if set
+        if self.config.max_files > 0:
+            kotlin_files = kotlin_files[:self.config.max_files]
+            self.logger.info(f"Processing {len(kotlin_files)} files (limited by max_files={self.config.max_files})")
+        
+        # Process files in parallel
+        with ThreadPoolExecutor(max_workers=max_workers or min(32, (os.cpu_count() or 1) + 4)) as executor:
+            future_to_file = {
+                executor.submit(self._process_single_file, file_path): file_path 
+                for file_path in kotlin_files
+            }
+            
+            for future in as_completed(future_to_file):
+                file_path = future_to_file[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                    
+                    # Update statistics
+                    self.stats.files_processed += 1
+                    if result.status == GenerationStatus.COMPLETED:
+                        self.stats.files_succeeded += 1
+                    else:
+                        self.stats.files_failed += 1
+                        
+                except Exception as e:
+                    self.logger.error(f"Error processing file {file_path}: {e}")
+                    self.stats.files_failed += 1
+        
+        # Update total processing time
+        self.stats.total_processing_time += time.time() - start_time
+        
+        self.logger.info(
+            f"Test generation completed in {self.stats.total_processing_time:.2f}s. "
+            f"Success: {self.stats.files_succeeded}, Failed: {self.stats.files_failed}, "
+            f"Cache hit rate: {self.stats.cache_hit_rate():.1f}%"
+        )
+        
+        return results
+
     def generate_tests(self, request: GenerationRequest) -> GenerationResult:
         """
         Generate tests for a single file or class.
@@ -150,91 +290,6 @@ class KotlinTestGenerator(TestGenerator):
                 error_message=str(e)
             )
     
-    def generate_tests_for_directory(self, source_dir: str) -> List[GenerationResult]:
-        """
-        Generate tests for all Kotlin files in a directory.
-        
-        Args:
-            source_dir: Directory containing Kotlin source files
-            
-        Returns:
-            List of GenerationResult objects
-        """
-        self.logger.info(f"Starting batch test generation for directory: {source_dir}")
-        
-        if not os.path.exists(source_dir):
-            self.logger.error(f"Source directory does not exist: {source_dir}")
-            return []
-        
-        # Find all Kotlin files
-        kotlin_files = self._find_kotlin_files(source_dir)
-        self.logger.info(f"Found {len(kotlin_files)} Kotlin files to process")
-        
-        if not kotlin_files:
-            self.logger.warning(f"No Kotlin files found in {source_dir}")
-            return []
-        
-        results = []
-        
-        for file_path in kotlin_files:
-            try:
-                # Read source code
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    source_code = f.read()
-                
-                # Create generation request
-                kotlin_class = KotlinClass(
-                    name=self.parser.extract_class_name(source_code) or "UnknownClass",
-                    source_code=source_code,
-                    file_path=file_path
-                )
-                
-                # Generate output file path
-                output_file = os.path.join(self.config.output_dir, f"{kotlin_class.name}Test.kt")
-                
-                request = GenerationRequest(
-                    request_id=str(uuid.uuid4()),
-                    class_name=kotlin_class.name,
-                    source_code=kotlin_class.source_code or "",
-                    parameters=None
-                )
-                # Attach output_file for downstream reporting
-                setattr(request, 'output_file', output_file)
-                
-                # Generate tests
-                result = self.generate_tests(request)
-                results.append(result)
-                
-                # Update statistics
-                self.stats.files_processed += 1
-                if result.status == GenerationStatus.COMPLETED:
-                    self.stats.files_succeeded += 1
-                else:
-                    self.stats.files_failed += 1
-                    
-            except Exception as e:
-                self.logger.error(f"Error processing file {file_path}: {e}")
-                kotlin_class = KotlinClass(
-                    name="UnknownClass",
-                    source_code="",
-                    file_path=file_path
-                )
-                request = GenerationRequest(
-                    request_id=str(uuid.uuid4()),
-                    class_name=kotlin_class.name,
-                    source_code=kotlin_class.source_code or "",
-                    parameters=None
-                )
-                results.append(GenerationResult(
-                    request_id=request.request_id,
-                    status=GenerationStatus.FAILED,
-                    error_message=str(e)
-                ))
-                self.stats.files_failed += 1
-        
-        self.logger.info(f"Completed batch generation. Success rate: {self.stats.success_rate():.1f}%")
-        return results
-    
     def extract_class_info(self, source_code: str, file_path: str) -> Optional[KotlinClass]:
         """
         Extract class information from source code.
@@ -280,17 +335,6 @@ class KotlinTestGenerator(TestGenerator):
                     kotlin_files.append(os.path.join(root, file))
         
         return kotlin_files
-    
-    def _find_similar_tests(self, kotlin_class: KotlinClass) -> List[str]:
-        """Find similar existing tests for context."""
-        try:
-            return self.similarity_indexer.find_similar(
-                kotlin_class.source_code, 
-                top_k=self.config.similarity_top_k
-            )
-        except Exception as e:
-            self.logger.warning(f"Error finding similar tests: {e}")
-            return []
     
     def _generate_test_code(self, kotlin_class: KotlinClass, similar_tests: List[str]) -> str:
         """
@@ -363,26 +407,19 @@ class KotlinTestGenerator(TestGenerator):
         """
         Validate and improve the generated test code with compilation and coverage checks.
         
-        This enhanced method performs the following steps:
-        1. Runs static analysis to identify coverage gaps
-        2. If Kotlin compiler is available:
-           - Attempts to compile the test
-           - If compilation fails, tries to fix the issues
-           - Runs tests with coverage collection
-           - If coverage is insufficient, generates additional tests
-        
-        Args:
-            kotlin_class: The Kotlin class being tested
-            test_code: The generated test code to validate and improve
-            
-        Returns:
-            Optional[str]: Improved test code if validation is successful, None otherwise
+        This method is optimized for speed by default, with expensive operations
+        (like compilation and coverage analysis) being optional.
         """
         if not self.config.enable_validation:
             return test_code
             
         self.logger.info(f"Validating and improving test for class: {kotlin_class.name}")
         
+        # Skip validation if explicitly disabled in config
+        if not getattr(self.config, 'enable_compilation_checks', False):
+            self.logger.info("Compilation checks disabled in config")
+            return test_code
+            
         import tempfile
         import os
         import shutil
@@ -392,21 +429,22 @@ class KotlinTestGenerator(TestGenerator):
         temp_file_path = None
         
         try:
-            # Always run static analysis first
-            self.logger.info("Running static analysis for coverage gaps...")
-            static_analysis = self._analyze_static_coverage(kotlin_class, test_code)
-            
-            # If we found issues through static analysis, try to improve the tests
-            if static_analysis and any(len(v) > 0 for v in static_analysis.values()):
-                self.logger.info("Found potential coverage gaps through static analysis")
-                improved_code = self._improve_test_coverage(
-                    kotlin_class, 
-                    test_code,
-                    {'static_analysis': static_analysis}
-                )
-                if improved_code and improved_code != test_code:
-                    self.logger.info("Successfully improved tests using static analysis")
-                    test_code = improved_code
+            # Skip static analysis if disabled in config
+            if getattr(self.config, 'enable_static_analysis', False):
+                self.logger.info("Running static analysis for coverage gaps...")
+                static_analysis = self._analyze_static_coverage(kotlin_class, test_code)
+                
+                # If we found issues through static analysis, try to improve the tests
+                if static_analysis and any(len(v) > 0 for v in static_analysis.values()):
+                    self.logger.info("Found potential coverage gaps through static analysis")
+                    improved_code = self._improve_test_coverage(
+                        kotlin_class, 
+                        test_code,
+                        {'static_analysis': static_analysis}
+                    )
+                    if improved_code and improved_code != test_code:
+                        self.logger.info("Successfully improved tests using static analysis")
+                        return improved_code
             
             # Check if Kotlin compiler is available for dynamic analysis
             has_compiler = shutil.which("kotlinc") is not None
@@ -416,81 +454,91 @@ class KotlinTestGenerator(TestGenerator):
                 return test_code
             
             # Create temp file for compilation
-            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.kt', delete=False)
-            temp_file_path = temp_file.name
-            temp_file.write(test_code)
-            temp_file.close()
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.kt', delete=False) as temp_file:
+                temp_file_path = temp_file.name
+                temp_file.write(test_code)
             
-            # Step 1: Compile the test
-            compile_success, compile_output = self._compile_kotlin_test(
-                test_file_path=temp_file_path,
-                classpath=getattr(self.config, 'classpath', None)
-            )
-            
-            if not compile_success:
-                self.logger.warning(f"Test compilation failed: {compile_output}")
-                # Try to fix compilation issues
-                fixed_code = self._fix_compilation_issues(kotlin_class, test_code, compile_output)
-                if fixed_code and fixed_code != test_code:
-                    self.logger.info("Successfully fixed compilation issues")
-                    test_code = fixed_code
-                    # Update the temp file with fixed code
-                    with open(temp_file_path, 'w', encoding='utf-8') as f:
-                        f.write(test_code)
+            # Skip compilation if disabled in config
+            if not getattr(self.config, 'enable_compilation', False):
+                self.logger.info("Compilation checks disabled in config")
+                return test_code
                 
-                # Try to improve based on compilation errors
-                improved_code = self._improve_test_coverage(
-                    kotlin_class, 
-                    test_code,
-                    {'compilation_error': compile_output}
-                )
-                if improved_code and improved_code != test_code:
-                    self.logger.info("Generated improved tests based on compilation errors")
-                    return improved_code
+            # Set a timeout for compilation
+            import signal
+            
+            class TimeoutError(Exception):
+                pass
                 
-                return test_code  # Return the best we have
+            def handler(signum, frame):
+                raise TimeoutError("Compilation timed out")
+                
+            # Set the signal handler and a 30-second timeout
+            signal.signal(signal.SIGALRM, handler)
+            signal.alarm(30)  # 30 second timeout
             
-            # If we get here, compilation was successful
-            # Step 2: Run tests with coverage
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(temp_file_path)))
-            run_success, coverage_data = self._run_test_with_coverage(
-                test_class_name=kotlin_class.name,
-                project_root=project_root
-            )
-            
-            if run_success and coverage_data:
-                self.logger.info(
-                    f"Test coverage: {coverage_data.get('line_coverage', {}).get('percentage', 0):.1f}% lines, "
-                    f"{coverage_data.get('branch_coverage', {}).get('percentage', 0):.1f}% branches"
+            try:
+                # Step 1: Compile the test with timeout
+                compile_success, compile_output = self._compile_kotlin_test(
+                    test_file_path=temp_file_path,
+                    classpath=getattr(self.config, 'classpath', None)
                 )
                 
-                # Step 3: Check if we need to improve coverage
-                min_coverage = getattr(self.config, 'min_coverage', 80.0)
-                current_coverage = coverage_data.get('line_coverage', {}).get('percentage', 0)
-                
-                if current_coverage < min_coverage:
-                    self.logger.info("Test coverage below threshold, attempting to improve...")
-                    improved_code = self._improve_test_coverage(
-                        kotlin_class, test_code, coverage_data
-                    )
+                if not compile_success:
+                    self.logger.warning(f"Test compilation failed: {compile_output}")
+                    # Only try to fix if enabled in config
+                    if getattr(self.config, 'enable_auto_fix', False):
+                        fixed_code = self._fix_compilation_issues(kotlin_class, test_code, compile_output)
+                        if fixed_code and fixed_code != test_code:
+                            self.logger.info("Successfully fixed compilation issues")
+                            test_code = fixed_code
                     
-                    if improved_code and improved_code != test_code:
-                        self.logger.info("Successfully improved test coverage")
-                        return improved_code
-            
-            return test_code
-            
+                    return test_code  # Return the best we have
+                
+                # If we get here, compilation was successful
+                # Skip coverage checks if disabled in config
+                if not getattr(self.config, 'enable_coverage_checks', False):
+                    return test_code
+                    
+                # Run tests with coverage (with timeout)
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(temp_file_path)))
+                run_success, coverage_data = self._run_test_with_coverage(
+                    test_class_name=os.path.basename(temp_file_path).replace('.kt', 'Kt'),
+                    project_root=project_root
+                )
+                
+                if run_success and coverage_data:
+                    # Only try to improve coverage if enabled in config
+                    if getattr(self.config, 'enable_coverage_improvement', False):
+                        improved_code = self._improve_test_coverage(
+                            kotlin_class,
+                            test_code,
+                            coverage_data
+                        )
+                        if improved_code and improved_code != test_code:
+                            self.logger.info("Successfully improved test coverage")
+                            return improved_code
+                
+                return test_code
+                
+            except TimeoutError:
+                self.logger.warning("Test validation timed out. Returning current test code.")
+                return test_code
+                
+            finally:
+                # Disable the alarm
+                signal.alarm(0)
+                
         except Exception as e:
             self.logger.error(f"Error during test validation: {str(e)}", exc_info=True)
-            return test_code  # Return the best we have so far
+            return test_code  # Return the original code on error
             
         finally:
-            # Clean up temporary file
-            if temp_file_path and os.path.exists(temp_file_path):
-                try:
-                    os.remove(temp_file_path)
-                except Exception as e:
-                    self.logger.warning(f"Error cleaning up temporary file: {str(e)}")
+            # Clean up temp file
+            try:
+                if temp_file_path and os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+            except Exception as e:
+                self.logger.warning(f"Failed to clean up temp file: {str(e)}")
     
     def _compile_kotlin_test(self, test_file_path: str, classpath: str = None) -> Tuple[bool, str]:
         """

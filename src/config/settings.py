@@ -22,7 +22,7 @@ class ModelConfig:
     llm_top_p: float = 0.8
     
     # LangChain Configuration
-    use_langchain: bool = True
+    use_langchain: bool = False
     langchain_provider: str = "langchain_ollama"
     
     # Embedding Configuration
@@ -166,21 +166,33 @@ config = Config()
 # Additional configuration classes for specific components
 @dataclass
 class GenerationConfig:
-    """Configuration for test generation workflow."""
-    
+    """Configuration for test generation."""
+    # Required directories
     source_dir: str = "input-src"
     output_dir: str = "output-test"
     existing_tests_dir: str = "testcase-datastore"
     
     # Generation parameters
-    temperature: float = 0.1
-    max_tokens: int = 2048
-    similarity_top_k: int = 3
-    
-    # Feature flags
+    max_files: int = 0  # 0 means no limit
     enable_validation: bool = True
-    enable_backup: bool = True
-    debug_mode: bool = False
+    min_coverage: float = 80.0
+    classpath: Optional[str] = None
+    
+    # Performance optimization flags (all disabled by default for speed)
+    enable_compilation_checks: bool = False
+    enable_static_analysis: bool = False
+    enable_auto_fix: bool = False
+    enable_coverage_checks: bool = False
+    enable_coverage_improvement: bool = False
+    max_similar_tests: int = 2
+    max_source_code_chars: int = 2000
+    
+    # LLM generation parameters for speed
+    temperature: float = 0.3
+    max_tokens: int = 1000
+    top_p: float = 0.9
+    num_ctx: int = 2048
+    timeout: int = 60  # seconds
     
     def __post_init__(self):
         """Ensure directories exist."""
