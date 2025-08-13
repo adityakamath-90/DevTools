@@ -57,6 +57,9 @@ DevTools/
    
    # Download CodeLlama model
    ollama pull codellama:instruct
+   
+   # Download CodeBERT model for semantic search and embeddings
+   ollama pull microsoft/codebert-base
    ```
 
 ## 🛠️ Usage
@@ -115,6 +118,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 1. **Python 3.9+** with pip installed
 2. **Ollama** installed and running locally
 3. **CodeLlama model** downloaded via Ollama
+4. **CodeBERT model** downloaded via Ollama for semantic search and embeddings
 
 ### Installation
 
@@ -134,9 +138,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    # Install Ollama (if not already installed)
    curl -fsSL https://ollama.com/install.sh | sh
    
-   # Download CodeLlama model
+   # Download required models (this may take a while)
+   # CodeLlama for test generation (via Ollama, ~3.8GB)
    ollama pull codellama:instruct
    
+   # CodeBERT will be automatically downloaded by the Python application
+   # when it's first run through the Hugging Face Transformers library
    # Start Ollama server (if not running)
    ollama serve
    ```
@@ -269,7 +276,6 @@ DevTools/
 ```
 
 ## 🔄 Migration Guide
-
 ### From Legacy to Modular Architecture
 
 If you're upgrading from the legacy version:
