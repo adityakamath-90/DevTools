@@ -22,6 +22,7 @@ from src.services.embedding_service import EmbeddingIndexerService, SimpleEmbedd
 from src.services.kdoc_service import KDocService
 from src.core.test_generator import KotlinTestGenerator
 from src.utils.logging import get_logger
+from src.agents.test_pipeline import run_pipeline
 from src.models.data_models import GenerationStatus
 
 logger = get_logger(__name__)
@@ -294,13 +295,14 @@ def main():
     
     parser.add_argument(
         'command',
-        choices=['test', 'kdoc', 'health', 'metrics', 'improve'],
+        choices=['test', 'kdoc', 'health', 'metrics', 'improve', 'pipeline'],
         help='''Command to execute:
         test - Generate tests for Kotlin files
         kdoc - Generate KDoc documentation
         health - Check service health
         metrics - Get performance metrics
         improve - Improve existing tests with feedback
+        pipeline - Run the full local multi-agent pipeline (generate -> compile -> coverage loop)
         '''
     )
     
@@ -340,6 +342,13 @@ def main():
         '--existing-tests-dir',
         default='testcase-datastore',
         help='Directory containing existing test cases for context'
+    )
+
+    # Pipeline-specific toggles
+    parser.add_argument(
+        '--use-langchain',
+        action='store_true',
+        help='Use LangChain-based orchestrator for the pipeline (if available)'
     )
     
     parser.add_argument(
@@ -386,15 +395,12 @@ def main():
                 print("Error: --source-file, --test-file, and --feedback are required for the improve command")
                 parser.print_help()
                 sys.exit(1)
-                
             try:
                 # Read source and test code
                 with open(args.source_file, 'r') as f:
                     source_code = f.read()
-                    
                 with open(args.test_file, 'r') as f:
                     test_code = f.read()
-                    
                 # Generate improved test code
                 output_file = args.output_file or args.test_file
                 improved_test = app.improve_tests_with_feedback(
@@ -403,20 +409,31 @@ def main():
                     user_feedback=args.feedback,
                     output_dir=os.path.dirname(output_file) or None
                 )
-                
                 # Save the improved test
                 with open(output_file, 'w') as f:
                     f.write(improved_test)
-                    
                 print(f"✅ Successfully improved test code saved to: {output_file}")
                 sys.exit(0)
-                
             except FileNotFoundError as e:
                 print(f"Error: {e}")
                 sys.exit(1)
             except Exception as e:
                 print(f"Error improving test: {e}")
                 sys.exit(1)
+
+        elif args.command == 'pipeline':
+            # Run multi-agent pipeline using local Ollama + Gradle + JaCoCo
+            cov = run_pipeline(
+                source_dir=args.source_dir,
+                output_dir=args.output_dir,
+                gradle_project_dir='validation-system/gradle-project',
+                coverage_threshold=80.0,
+                max_iterations=3,
+                # forward to PipelineConfig.use_langchain via kwargs expansion in run_pipeline
+                use_langchain=args.use_langchain,
+            )
+            print(f"\nFinal coverage: {cov:.2f}%")
+            sys.exit(0 if cov >= 80.0 else 2)
                 
     except KeyboardInterrupt:
         print("\nOperation cancelled by user")

@@ -22,7 +22,7 @@ class ModelConfig:
     llm_top_p: float = 0.8
     
     # LangChain Configuration
-    use_langchain: bool = False
+    use_langchain: bool = True
     langchain_provider: str = "langchain_ollama"
     
     # Embedding Configuration

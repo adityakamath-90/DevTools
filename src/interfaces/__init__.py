@@ -11,8 +11,7 @@ from .base_interfaces import (
     CacheProvider,
     MetricsCollector,
     Logger,
-    ConfigProvider,
-    EmbeddingIndexer  # Alias
+    ConfigProvider
 )
 
 __all__ = [
@@ -26,6 +25,5 @@ __all__ = [
     "CacheProvider",
     "MetricsCollector",
     "Logger",
-    "ConfigProvider",
-    "EmbeddingIndexer"
+    "ConfigProvider"
 ]

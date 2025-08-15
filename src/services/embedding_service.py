@@ -213,7 +213,7 @@ class EmbeddingIndexerService(SimilarityIndexer):
     
     def _encode_batch(self, texts: List[str]) -> np.ndarray:
         """Encode a batch of texts using CodeBERT."""
-        self.logger.info(f"Generating embeddings for {len(texts)} texts...")
+        self.logger.info(f"Generating embeddings for {len(texts)} tests...")
         
         embeddings = []
         
@@ -550,6 +550,32 @@ class SimpleEmbeddingIndexerService(SimilarityIndexer):
         except Exception as e:
             self.logger.error(f"Error adding test case: {e}")
             return False
+
+    def search(self, query_embedding: EmbeddingVector, top_k: int = 3) -> List[SimilarityMatch]:
+        """Search for similar items, delegating to find_similar() and wrapping results.
+
+        This satisfies the SimilarityIndexer ABC requirement.
+        """
+        try:
+            # Convert query to text if possible
+            if hasattr(query_embedding, 'text'):
+                query_text = query_embedding.text
+            else:
+                query_text = str(query_embedding)
+
+            texts = self.find_similar(query_text, top_k=top_k)
+            matches: List[SimilarityMatch] = []
+            for i, content in enumerate(texts):
+                matches.append(SimilarityMatch(
+                    content=content,
+                    score=max(0.0, 1.0 - i * 0.1),
+                    file_path="",
+                    line_number=0,
+                ))
+            return matches
+        except Exception as e:
+            self.logger.error(f"Search failed: {e}")
+            return []
 
     def build_index(self, embeddings: List[EmbeddingVector]) -> None:
         """Build similarity search index from embeddings."""

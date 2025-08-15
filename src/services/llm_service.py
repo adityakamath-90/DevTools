@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import importlib
 
 from src.interfaces.base_interfaces import LLMProvider
-from ..models.data_models import ModelMetrics
+from src.models.data_models import ModelMetrics
 from src.config.settings import LLMConfig
 from src.config.langchain_config import LangChainConfig, default_config as default_langchain_config
 from src.providers.default_provider import DefaultLLMProvider

@@ -252,7 +252,3 @@ class ConfigProvider(Protocol):
     def validate(self) -> bool:
         """Validate configuration."""
         ...
-
-
-# Type aliases for common interfaces
-EmbeddingIndexer = SimilarityIndexer  # Alias for backward compatibility

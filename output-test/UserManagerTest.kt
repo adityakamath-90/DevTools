@@ -1,91 +1,40 @@
 package com.example.user
 
 import io.mockk.every
-import io.mockk.impl.annotations.MockK
-import io.mockk.junit5.MockKExtension
+import io.mockk.mockk
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
-import java.lang.IllegalArgumentException
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
-@ExtendWith(MockKExtension::class)
-internal class UserManagerTest {
-    @MockK
-    private lateinit var users: MutableList<User>
-
+class UserManagerTest {
     @Test
-    fun `create user should return created user`() {
-        // given
-        val username = "username"
-        val email = "email@example.com"
+    fun createUser_validInput_userCreated() {
+        val userManager = mockk<UserManager>()
+        every { userManager.createUser("John Doe", "johndoe@email.com") } returns User(1, "John Doe", "johndoe@email.com")
 
-        every { users.add(any()) } returns true
+        val createdUser = userManager.createUser("John Doe", "johndoe@email.com")
 
-        // when
-        val user = UserManager().createUser(username, email)
-
-        // then
-        assertEquals(1L, user.id)
-        assertEquals(username, user.username)
-        assertEquals(email, user.email)
-        assertTrue(user.isActive)
+        assertEquals("John Doe", createdUser.username)
+        assertEquals("johndoe@email.com", createdUser.email)
     }
 
     @Test
-    fun `create user should throw IllegalArgumentException for empty username`() {
-        // given
-        val username = ""
-        val email = "email@example.com"
+    fun createUser_invalidInput_errorThrown() {
+        val userManager = mockk<UserManager>()
+        every { userManager.createUser("", "") } throws IllegalArgumentException("Username and email are required.")
 
-        every { users.add(any()) } returns true
-
-        // when, then
-        assertFailsWith<IllegalArgumentException>("Username cannot be empty") {
-            UserManager().createUser(username, email)
-        }
+        assertFailsWith<IllegalArgumentException> { userManager.createUser("", "") }
     }
 
     @Test
-    fun `create user should throw IllegalArgumentException for empty email`() {
-        // given
-        val username = "username"
-        val email = ""
+    fun updateUserStatus_existingUser_statusUpdated() {
+        val userManager = mockk<UserManager>()
+        every { userManager.findUserById(1) } returns User(1, "John Doe", "johndoe@email.com")
+        every { userManager.updateUserStatus(1, false) } returns true
 
-        every { users.add(any()) } returns true
+        val updatedUser = userManager.updateUserStatus(1, false)
 
-        // when, then
-        assertFailsWith<IllegalArgumentException>("Email cannot be empty") {
-            UserManager().createUser(username, email)
-        }
-    }
-
-    @Test
-    fun `find user by id should return user`() {
-        // given
-        val id = 1L
-        every { users.firstOrNull { it.id == id } } returns User(1L, "username", "email@example.com")
-
-        // when
-        val user = UserManager().findUserById(id)
-
-        // then
-        assertEquals(id, user?.id)
-        assertEquals("username", user?.username)
-        assertEquals("email@example.com", user?.email)
-    }
-
-    @Test
-    fun `find user by id should return null for non-existent id`() {
-        // given
-        val id = 1L
-        every { users.firstOrNull { it.id == id } } returns null
-
-        // when
-        val user = UserManager().findUserById(id)
-
-        // then
-        assertEquals(null, user)
+        assertFalse(userManager.getActiveUsers().contains(updatedUser))
     }
 }

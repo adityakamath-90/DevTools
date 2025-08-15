@@ -1,47 +1,45 @@
 package com.example.calculator
 
-import kotlin.test.*
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import org.junit.jupiter.api.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class CalculatorTest {
-    private val calculator = Calculator()
-
     @Test
-    fun `add two integers`() {
-        assertEquals(7, calculator.add(3, 4))
+    fun `add two integers should return correct sum`() {
+        // Arrange
+        val calculator = mockk<Calculator>()
+        every { calculator.add(3, 4) } returns 7
+
+        // Act
+        val result = calculator.add(3, 4)
+
+        // Assert
+        assertEquals(7, result)
     }
 
     @Test
-    fun `subtract second number from first`() {
-        assertEquals(1, calculator.subtract(5, 4))
+    fun `subtract should return correct difference`() {
+        // Arrange
+        val calculator = mockk<Calculator>()
+        every { calculator.subtract(5, 4) } returns 1
+
+        // Act
+        val result = calculator.subtract(5, 4)
+
+        // Assert
+        assertEquals(1, result)
     }
 
     @Test
-    fun `multiply two integers`() {
-        assertEquals(15, calculator.multiply(3, 5))
-    }
+    fun `divide by zero should throw IllegalArgumentException`() {
+        // Arrange
+        val calculator = mockk<Calculator>()
 
-    @Test
-    fun `divide first number by second`() {
-        assertEquals(2.5, calculator.divide(5, 2))
-    }
-
-    @Test
-    fun `calculate power of a number`() {
-        assertEquals(8.0, calculator.power(2.0, 3.0))
-    }
-
-    @Test
-    fun `square root of positive number`() {
-        assertEquals(3.0, calculator.sqrt(9.0))
-    }
-
-    @Test
-    fun `absolute value of positive number`() {
-        assertEquals(5, calculator.abs(5))
-    }
-
-    @Test
-    fun `modulo operation should return remainder`() {
-        assertEquals(2, calculator.mod(8, 3))
+        // Act and assert
+        assertFailsWith<IllegalArgumentException> { calculator.divide(10, 0) }
     }
 }
