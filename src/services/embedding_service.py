@@ -11,14 +11,13 @@ import time
 import torch
 import faiss
 import numpy as np
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from dataclasses import dataclass
-from pathlib import Path
 
-from interfaces.base_interfaces import SimilarityIndexer, EmbeddingProvider
-from models.data_models import SimilarityMatch, EmbeddingVector
-from config.settings import EmbeddingConfig
-from utils.logging import get_logger
+from src.interfaces.base_interfaces import SimilarityIndexer, EmbeddingProvider
+from src.models.data_models import SimilarityMatch, EmbeddingVector
+from src.config.settings import EmbeddingConfig
+from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -253,14 +252,16 @@ class EmbeddingIndexerService(SimilarityIndexer):
             self.logger.error(f"Error encoding batch: {e}")
             raise
     
-    def find_similar(self, query: str, top_k: int = 3) -> List[str]:
+    def find_similar(self, query: str, top_k: int = 3, similarity_threshold: float = 0.8) -> List[str]:
         """
         Find similar test cases for a given query.
         
         Args:
             query: Source code to find similar tests for
             top_k: Number of similar tests to return
-            
+            similarity_threshold: Minimum similarity score (0-1) to consider a match valid.
+                                 If no matches meet this threshold, an LLM will be used to generate test cases.
+                                 
         Returns:
             List of similar test case contents
         """
@@ -272,20 +273,70 @@ class EmbeddingIndexerService(SimilarityIndexer):
             # Encode query
             query_embedding = self._encode_single_batch([query])
             
-            # Search index
+            # Search index with a larger k to find any close matches
+            search_k = min(top_k * 2, len(self.test_cases))  # Look at more candidates
             distances, indices = self.index.search(
                 query_embedding.astype(np.float32), 
-                min(top_k, len(self.test_cases))
+                search_k
             )
             
-            # Return matching test cases
+            # Calculate similarity scores (1 / (1 + distance))
+            similarities = 1 / (1 + distances[0])
+            
+            # Filter results by similarity threshold
             results = []
-            for idx in indices[0]:
-                if idx < len(self.test_cases):
-                    results.append(self.test_cases[idx])
+            for i, (idx, sim) in enumerate(zip(indices[0], similarities)):
+                if idx < len(self.test_cases) and sim >= similarity_threshold:
+                    results.append((sim, self.test_cases[idx]))
+                if len(results) >= top_k:
+                    break
+            
+            # If no close matches found, use LLM to generate test cases
+            if not results and self.test_cases:  # Only use LLM if we have some test cases for context
+                try:
+                    from src.services.llm_service import LLMService
+                    from src.config.settings import LLMConfig
+                    
+                    self.logger.info("No close matches found, generating test cases with LLM")
+                    
+                    # Initialize LLM service with default config
+                    llm_service = LLMService(LLMConfig())
+                    
+                    # Prepare prompt for test case generation
+                    prompt = f"""
+                    Generate {top_k} unit test cases for the following code. 
+                    The tests should be in Kotlin and follow the same style as the example tests below.
+                    
+                    Example tests:
+                    {self.test_cases[:2]}
+                    
+                    Code to test:
+                    {query}
+                    
+                    Generate {top_k} test cases that would effectively test this code.
+                    """
+                    
+                    # Generate test cases
+                    response = llm_service.generate(prompt)
+                    if response.success and response.text:
+                        # Add generated test cases to index
+                        generated_test = response.text
+                        self.add_test_case(generated_test, "generated_test.kt")
+                        results = [(1.0, generated_test)]  # High confidence in LLM-generated tests
+                        
+                except Exception as e:
+                    self.logger.error(f"Error generating test cases with LLM: {e}")
+            
+            # If we still have no results, return the most similar regardless of threshold
+            if not results and indices.size > 0:
+                for idx in indices[0]:
+                    if idx < len(self.test_cases):
+                        results.append((0.0, self.test_cases[idx]))  # Low confidence score
+                    if len(results) >= top_k:
+                        break
             
             self.logger.info(f"Found {len(results)} similar test cases")
-            return results
+            return [test for _, test in results]
             
         except Exception as e:
             self.logger.error(f"Error finding similar tests: {e}")
@@ -509,32 +560,6 @@ class SimpleEmbeddingIndexerService(SimilarityIndexer):
             self.logger.error(f"Failed to build index: {e}")
             raise
 
-    def search(self, query_embedding: EmbeddingVector, top_k: int = 3) -> List[SimilarityMatch]:
-        """Search for similar items in the index."""
-        try:
-            # Convert query to text if needed
-            if hasattr(query_embedding, 'text'):
-                query_text = query_embedding.text
-            else:
-                query_text = str(query_embedding)
-            
-            similar_content = self.find_similar(query_text, top_k)
-            
-            matches = []
-            for i, content in enumerate(similar_content):
-                match = SimilarityMatch(
-                    content=content,
-                    score=1.0 - (i * 0.1),  # Simple scoring
-                    file_path="",
-                    line_number=0
-                )
-                matches.append(match)
-            
-            return matches
-        except Exception as e:
-            self.logger.error(f"Search failed: {e}")
-            return []
-
     def add_to_index(self, embeddings: List[EmbeddingVector]) -> None:
         """Add new embeddings to existing index."""
         try:
@@ -548,42 +573,3 @@ class SimpleEmbeddingIndexerService(SimilarityIndexer):
     def index_size(self) -> int:
         """Get the size of the index."""
         return len(self.test_cases)
-
-
-# Legacy compatibility classes
-class EmbeddingIndexer:
-    """Legacy wrapper for EmbeddingIndexerService."""
-    
-    def __init__(self, test_dir: str, embedding_model_name: str = "microsoft/codebert-base"):
-        self.logger = get_logger(self.__class__.__name__)
-        self.logger.warning("Using deprecated EmbeddingIndexer. Consider updating to EmbeddingIndexerService.")
-        
-        # Try to use advanced indexer first
-        try:
-            from config.settings import EmbeddingConfig
-            config = EmbeddingConfig(
-                test_cases_dir=test_dir,
-                model_name=embedding_model_name
-            )
-            self.service = EmbeddingIndexerService(config)
-        except ImportError:
-            # Fallback to simple indexer
-            self.service = SimpleEmbeddingIndexerService(test_dir)
-    
-    def retrieve_similar(self, code: str, top_k: int = 3) -> List[str]:
-        """Legacy method for retrieving similar test cases."""
-        return self.service.find_similar(code, top_k)
-
-
-class SimpleEmbeddingIndexer:
-    """Legacy wrapper for SimpleEmbeddingIndexerService."""
-    
-    def __init__(self, test_dir: str):
-        self.logger = get_logger(self.__class__.__name__)
-        self.logger.warning("Using deprecated SimpleEmbeddingIndexer. Consider updating to SimpleEmbeddingIndexerService.")
-        
-        self.service = SimpleEmbeddingIndexerService(test_dir)
-    
-    def retrieve_similar(self, code: str, top_k: int = 3) -> List[str]:
-        """Legacy method for retrieving similar test cases."""
-        return self.service.find_similar(code, top_k)
