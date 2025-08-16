@@ -262,7 +262,7 @@ def main():
                         
                         # Update the test output with the improved version
                         st.session_state.test_output = improved_test
-                        st.session_state.show_feedback = False  # Reset feedback state
+                        st.session_state.show_feedback = True  # Keep feedback visible for iterative improvements
                         st.success("Test code has been improved based on your feedback!")
                         st.rerun()
                 else:
