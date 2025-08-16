@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 import tempfile
 import uuid
+import time
 
 # Set page config
 st.set_page_config(
@@ -57,7 +58,10 @@ def run_test_generation(kotlin_code: str, use_langchain: bool = True) -> str:
 
         # Generate tests
         log(f"Generating tests for class: {class_name}")
+        _t0 = time.perf_counter()
         result = app.test_generator.generate_tests(request)
+        _elapsed = time.perf_counter() - _t0
+        log(f"LLM/test generation took {_elapsed:.2f}s")
 
         # Prefer returning the generated test code directly
         test_code = getattr(result, 'test_code', None)
@@ -110,12 +114,15 @@ def improve_test_with_feedback(original_code: str, test_code: str, feedback: str
 
         # Use the application's method to improve tests with feedback
         log("Generating improved tests with feedback...")
+        _t0 = time.perf_counter()
         response = app.improve_tests_with_feedback(
             source_code=original_code,
             generated_test_code=test_code,
             user_feedback=feedback,
             output_dir=os.path.join(tempfile.gettempdir(), 'improved_tests')
         )
+        _elapsed = time.perf_counter() - _t0
+        log(f"Test improvement (feedback) took {_elapsed:.2f}s")
 
         # Accept plain string or LLM-like object with .text
         if isinstance(response, str) and response.strip():
