@@ -341,8 +341,8 @@ class PipelineConfig:
     output_dir: str = "output-test"
     gradle_project_dir: str = "validation-system/gradle-project"
     coverage_threshold: float = 80.0
-    max_iterations: int = 3
-    use_langchain: bool = False  # Set True to enable LangChain-run orchestrator
+    max_iterations: int = 1
+    use_langchain: bool = True  
 
 
 class MultiAgentOrchestrator:
@@ -461,8 +461,8 @@ def run_pipeline(
     output_dir: str = "output-test",
     gradle_project_dir: str = "validation-system/gradle-project",
     coverage_threshold: float = 80.0,
-    max_iterations: int = 3,
-    use_langchain: bool = False,
+    max_iterations: int = 1,
+    use_langchain: bool = True,
 ) -> float:
     orchestrator = MultiAgentOrchestrator(
         PipelineConfig(

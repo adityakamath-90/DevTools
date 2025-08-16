@@ -13,8 +13,8 @@ st.set_page_config(
     layout="wide"
 )
 
-def run_test_generation(kotlin_code: str) -> str:
-    """Run the test generation with the provided Kotlin code"""
+def run_test_generation(kotlin_code: str, use_langchain: bool = True) -> str:
+    """Run the pipeline-based test generation with the provided Kotlin code"""
     debug_output = []
     
     def log(msg):
@@ -57,13 +57,15 @@ def run_test_generation(kotlin_code: str) -> str:
             
             # Prepare the command
             cmd = [
-                sys.executable, 
-                main_script, 
-                'test',
+                sys.executable,
+                main_script,
+                'pipeline',
                 '--source-dir', input_src_dir,
                 '--output-dir', output_dir,
-                '--debug'  # Enable debug output
+                '--debug',  # Enable debug output
             ]
+            if use_langchain:
+                cmd.append('--use-langchain')
             log(f"Running command: {' '.join(cmd)}")
             
             try:
@@ -86,6 +88,14 @@ def run_test_generation(kotlin_code: str) -> str:
                     log("=== STDERR ===")
                     log(result.stderr)
                 
+                # Try to extract final coverage from stdout
+                coverage_line = None
+                if result.stdout:
+                    for line in result.stdout.splitlines()[::-1]:
+                        if line.strip().lower().startswith("final coverage:"):
+                            coverage_line = line.strip()
+                            break
+                
                 # Check for generated test files
                 generated_tests = list(Path(output_dir).rglob('*Test.kt'))
                 log(f"Found {len(generated_tests)} generated test files")
@@ -97,6 +107,8 @@ def run_test_generation(kotlin_code: str) -> str:
                     with open(test_file, 'r', encoding='utf-8') as f:
                         test_content = f.read()
                     log("Successfully read test file content")
+                    if coverage_line:
+                        return f"// {coverage_line}\n\n" + test_content
                     return test_content
                 
                 # If no test files found, return the command output
@@ -161,8 +173,13 @@ def improve_test_with_feedback(original_code: str, test_code: str, feedback: str
             output_dir=os.path.join(tempfile.gettempdir(), 'improved_tests')
         )
         
-        # Extract the text from the LLMResponse object
-        improved_test = response.text if hasattr(response, 'text') and response.text else test_code
+        # Accept plain string or LLM-like object with .text
+        if isinstance(response, str) and response.strip():
+            improved_test = response
+        elif hasattr(response, 'text') and getattr(response, 'text'):
+            improved_test = response.text
+        else:
+            improved_test = test_code
         
         log("Successfully generated improved test code")
         return improved_test
@@ -201,10 +218,13 @@ def main():
         with st.expander("Input Code", expanded=True):
             st.code(st.session_state.kotlin_code, language="kotlin")
     
+    # Options
+    use_langchain = st.checkbox("Use LangChain orchestrator", value=True)
+    
     # Generate tests button
     if st.button("Generate Tests", type="primary") and st.session_state.kotlin_code:
         with st.spinner("Generating tests..."):
-            st.session_state.test_output = run_test_generation(st.session_state.kotlin_code)
+            st.session_state.test_output = run_test_generation(st.session_state.kotlin_code, use_langchain)
             st.session_state.show_feedback = True
             st.rerun()
     
