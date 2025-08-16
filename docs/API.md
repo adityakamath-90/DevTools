@@ -92,6 +92,38 @@ Checks if the LLM service is available and responding.
 **Returns:**
 - `bool`: True if service is healthy, False otherwise
 
+#### Lightweight LLM Agent (src/services/llm_agent.py)
+
+```python
+class CodeLlamaAgent:
+    def __init__(self, api_url: str = "http://127.0.0.1:11434", model: str = "codellama:instruct", timeout: int = 300)
+    def chat(self, prompt: str, system_prompt: str | None = None) -> str
+    def extract_code_block(self, text: str) -> str
+
+class TestGeneratorAgent:
+    def __init__(self, agent: CodeLlamaAgent)
+    def generate_tests(self, class_name: str, class_code: str, similar_tests: list[str]) -> str
+```
+
+**Purpose**: Lightweight alternative to LangChain-based providers. Talks to Ollama via REST, manages minimal conversation state, and extracts Kotlin code blocks.
+
+**Key Notes:**
+- Uses shared `PromptBuilder` from `src/core/prompt_builder.py` to build prompts.
+- Designed for local-first setups; no LangChain dependency.
+- Complements (or can replace) `LangChainOllamaProvider` from `src/providers/langchain_provider.py`.
+
+**Example:**
+```python
+from src.services.llm_agent import CodeLlamaAgent, TestGeneratorAgent
+from src.core.prompt_builder import PromptBuilder
+
+agent = CodeLlamaAgent(api_url="http://127.0.0.1:11434", model="codellama:instruct")
+tg = TestGeneratorAgent(agent)
+
+prompt = PromptBuilder().build_test_prompt(class_code, similar_tests=[])
+tests = tg.generate_tests("Calculator", class_code, similar_tests)
+```
+
 #### EmbeddingIndexerService (src/services/embedding_service.py)
 
 ```python

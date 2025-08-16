@@ -54,7 +54,7 @@ The system now follows a layered, service-oriented architecture:
 │  test_generator.py | code_parser.py | prompt_builder.py         │
 ├─────────────────────────────────────────────────────────────────┤
 │                       Service Layer                             │
-│  llm_service.py | embedding_service.py | kdoc_service.py        │
+│  llm_service.py | llm_agent.py | embedding_service.py | kdoc_service.py │
 ├─────────────────────────────────────────────────────────────────┤
 │                    Configuration Layer                          │
 │  settings.py (environment-based config with overrides)          │
@@ -78,9 +78,13 @@ src/
 │   └── test_generator.py # Test generation orchestrator
 ├── services/            # Service layer
 │   ├── __init__.py
-│   ├── llm_service.py   # LLM interface with error handling
+│   ├── llm_service.py   # LLM interface with error handling (LangChain/requests)
+│   ├── llm_agent.py     # Lightweight Ollama CodeLlama agent (no LangChain)
 │   ├── embedding_service.py # Semantic similarity service
 │   └── kdoc_service.py  # KDoc generation service
+├── providers/           # LLM provider integrations
+│   ├── __init__.py
+│   └── langchain_provider.py # LangChain-based Ollama provider
 ├── interfaces/          # Abstract base classes
 │   ├── __init__.py
 │   └── base_interfaces.py # Interface definitions
@@ -127,6 +131,10 @@ The service layer provides clean abstractions for all external dependencies and 
 - **EmbeddingIndexerService**: Advanced semantic indexing using Microsoft CodeBERT
 - **SimpleEmbeddingIndexerService**: Lightweight fallback for constrained environments
 - **KDocService**: Documentation generation service with template system
+
+**Alternative LLM Paths:**
+- **LangChain Provider**: `src/providers/langchain_provider.py` implements `LLMProvider` via LangChain + Ollama.
+- **Lightweight Agent**: `src/services/llm_agent.py` (`CodeLlamaAgent`, `TestGeneratorAgent`) uses direct REST to Ollama with minimal state. Useful for low-dependency local setups.
 
 **Enhanced Features:**
 - Interface-driven design with dependency injection

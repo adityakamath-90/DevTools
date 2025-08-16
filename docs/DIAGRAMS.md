@@ -22,8 +22,14 @@ graph TD
     AI --> Embedding[Embedding Service]
     AI --> KDoc[KDoc Service]
     
+    %% LLM Path Alternatives
+    LLM --> Providers[Providers]
+    Providers --> LC[LangChain Provider]
+    Providers --> LA[Lightweight Agent]
+    LC --> Ollama[Ollama/CodeLlama]
+    LA --> Ollama
+    
     %% External Dependencies
-    LLM --> Ollama[Ollama/CodeLlama]
     Embedding --> FAISS[FAISS Index]
     Embedding --> CodeBERT[CodeBERT]
     
@@ -41,7 +47,7 @@ graph TD
     classDef external fill:#f3e5f5,stroke:#8e24aa,stroke-width:2px
     
     class CLI,Core,TestGen,PromptBuilder,Parser,FileMgr component
-    class AI,LLM,Embedding,KDoc service
+    class AI,LLM,Embedding,KDoc,Providers,LC,LA service
     class Ollama,FAISS,CodeBERT external
 ```
 
