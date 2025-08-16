@@ -58,7 +58,8 @@ class LangChainOllamaProvider(LLMProvider):
                  num_gpu: int = 0,
                  num_thread: int = os.cpu_count() or 8,
                  timeout: int = 300,
-                 keep_alive: str = "10m"):
+                 keep_alive: str = "10m",
+                 enable_streaming_callbacks: bool = False):
         """
         Initialize the LangChain Ollama provider.
         
@@ -89,13 +90,13 @@ class LangChainOllamaProvider(LLMProvider):
         self.num_thread = max(1, num_thread)  # Ensure at least 1
         self.timeout = max(1, timeout)  # Ensure at least 1 second
         self.keep_alive = keep_alive
+        self.enable_streaming_callbacks = enable_streaming_callbacks
         
         # Initialize the LangChain LLM
         self._initialize_llm()
         
         logger.info(
-            f"Initialized LangChainOllamaProvider with model: {model_name} "
-            f"(temperature={temperature}, max_tokens={max_tokens})"
+            f"Effective LLM settings -> model={self.model_name}, temp={self.temperature}, max_tokens={self.max_tokens}, top_p={self.top_p}, num_ctx={self.num_ctx}, num_gpu_layers={self.num_gpu}, num_threads={self.num_thread}, keep_alive={self.keep_alive}, streaming_callbacks={self.enable_streaming_callbacks}"
         )
     
     def _initialize_llm(self):
@@ -112,8 +113,11 @@ class LangChainOllamaProvider(LLMProvider):
                 f"at {self.base_url}"
             )
             
-            # Setup callback manager for streaming
-            callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+            # Setup callback manager for streaming (optional to reduce overhead)
+            callback_manager = (
+                CallbackManager([StreamingStdOutCallbackHandler()])
+                if self.enable_streaming_callbacks else CallbackManager([])
+            )
             
             # Initialize Ollama LLM with all configured parameters
             self.llm = Ollama(
@@ -210,6 +214,14 @@ class LangChainOllamaProvider(LLMProvider):
                 f"Generated {len(response)} characters in {response_time:.2f}s "
                 f"(model: {self.model_name})"
             )
+            
+            # Info-level concise summary for latency diagnostics
+            try:
+                logger.info(
+                    f"LLM.generate done in {response_time:.2f}s | prompt={len(prompt)} chars, output={len(response)} chars | temp={gen_params.get('temperature')} max_tokens={gen_params.get('max_tokens')} top_p={gen_params.get('top_p')} num_ctx={gen_params.get('num_ctx')}"
+                )
+            except Exception:
+                pass
             
             # Clean and return the response
             return response.strip()
