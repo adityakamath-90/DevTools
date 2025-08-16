@@ -174,10 +174,15 @@ cython_debug/
 .pypirc
 
 # DevTools specific
+.DS_Store
 input/
 output/
 data/
 *.tar.gz
 *.zip
-models/
 .ollama/
+validation-system/gradle-project/.gradle
+validation-system/gradle-project/build
+validation-system/gradle-project/.idea
+validation-system/gradle-project/.DS_Store
+validation-system/scripts/.DS_Store

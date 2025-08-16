@@ -1,12 +1,21 @@
 # Architecture Documentation
-## AI-Powered Kotlin Test Generation System
+## AI-Powered Kotlin Test Generation System v2.0
 
 ### Overview
-This project implements an advanced AI-powered system for Kotlin test generation that automatically creates comprehensive JUnit 5 test cases using Large Language Models (CodeLlama) and semantic similarity matching with Microsoft CodeBERT embeddings. The system features intelligent fallback mechanisms and robust error handling for production use.
+This project implements an advanced AI-powered system for Kotlin test generation that automatically creates comprehensive JUnit 5 test cases using Large Language Models (CodeLlama) and semantic similarity matching with Microsoft CodeBERT embeddings. The system has been completely redesigned with a modular, production-ready architecture featuring interface-driven design, robust configuration management, and comprehensive logging.
 
 ## 🎯 Key Achievements & System Capabilities
 
-### ✅ Production-Ready Features
+### ✅ Production-Ready Features (v2.0)
+- **Modular Architecture**: Interface-driven design with dependency injection
+- **Service-Oriented Design**: Clear separation of concerns with service layer
+- **Configuration Management**: Environment-based configuration with override capabilities
+- **Structured Logging**: Comprehensive logging system with configurable levels
+- **Error Handling**: Graceful degradation and robust error recovery
+- **Backward Compatibility**: Legacy scripts still work alongside new modular system
+- **CLI Interface**: Unified command-line interface with health checks and debugging
+
+### ✅ Enhanced AI Features
 - **Intelligent Test Generation**: Creates comprehensive JUnit 5 test cases with MockK support
 - **Semantic Similarity Matching**: Microsoft CodeBERT embeddings with FAISS indexing
 - **Fallback System**: SimpleEmbeddingIndexer for environments without ML dependencies
@@ -30,73 +39,184 @@ This project implements an advanced AI-powered system for Kotlin test generation
 - **PyTorch Backend**: Tensor operations for embedding computation
 - **Hugging Face Integration**: Automatic model downloading and caching
 
-## System Architecture
+## System Architecture v2.0
 
+### New Modular Architecture
+
+The system now follows a layered, service-oriented architecture:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        CLI Layer                                │
+│  main.py (unified CLI) | Legacy Scripts (backward compatibility) │
+├─────────────────────────────────────────────────────────────────┤
+│                        Core Layer                               │
+│  test_generator.py | code_parser.py | prompt_builder.py         │
+├─────────────────────────────────────────────────────────────────┤
+│                       Service Layer                             │
+│  llm_service.py | llm_agent.py | embedding_service.py | kdoc_service.py │
+├─────────────────────────────────────────────────────────────────┤
+│                    Configuration Layer                          │
+│  settings.py (environment-based config with overrides)          │
+├─────────────────────────────────────────────────────────────────┤
+│                     Foundation Layer                            │
+│  interfaces/ | models/ | utils/ (logging, helpers)             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Directory Structure
+
+```
+src/
+├── config/              # Configuration management
+│   ├── __init__.py
+│   └── settings.py      # Environment-based configuration
+├── core/                # Core business logic
+│   ├── __init__.py
+│   ├── code_parser.py   # Kotlin code parsing and analysis
+│   ├── prompt_builder.py # Context-aware prompt construction
+│   └── test_generator.py # Test generation orchestrator
+├── services/            # Service layer
+│   ├── __init__.py
+│   ├── llm_service.py   # LLM interface with error handling (LangChain/requests)
+│   ├── llm_agent.py     # Lightweight Ollama CodeLlama agent (no LangChain)
+│   ├── embedding_service.py # Semantic similarity service
+│   └── kdoc_service.py  # KDoc generation service
+├── providers/           # LLM provider integrations
+│   ├── __init__.py
+│   └── langchain_provider.py # LangChain-based Ollama provider
+├── interfaces/          # Abstract base classes
+│   ├── __init__.py
+│   └── base_interfaces.py # Interface definitions
+├── models/              # Data models
+│   ├── __init__.py
+│   └── data_models.py   # Result objects and data structures
+└── utils/               # Utilities
+    ├── __init__.py
+    └── logging.py       # Structured logging system
+```
 ### High-Level Architecture
 
 For comprehensive visual system architecture diagrams, see **[DIAGRAMS.md](./DIAGRAMS.md)** which contains detailed Mermaid diagrams showing:
-- Updated system component relationships with fallback mechanisms
-- Enhanced data flow architecture with ML pipeline
-- Class interaction diagrams with inheritance patterns
-- Deployment structure with ML stack integration
+- Updated system component relationships with modular architecture
+- Enhanced data flow architecture with service layer
+- Class interaction diagrams with interface patterns
+- Deployment structure with configuration management
 - Sequence diagrams showing the complete generation workflow
 
-## Enhanced Component Architecture
+## Enhanced Component Architecture v2.0
 
-### 1. Intelligent Test Generation System ⭐ *Core Enhanced Feature*
+### 1. Configuration Management System ⭐ *New Feature*
 
-The test generation system is the primary component, featuring advanced semantic similarity matching and robust fallback mechanisms for production environments.
+The configuration system provides flexible, environment-based configuration management.
 
 **Core Components:**
-- **KotlinTestGenerator**: Main orchestrator with enhanced error handling and logging
-- **EmbeddingIndexer**: Advanced semantic indexing using Microsoft CodeBERT and FAISS
-- **SimpleEmbeddingIndexer**: Lightweight fallback system for constrained environments
-- **LLMClient**: Robust Ollama/CodeLlama interface with error recovery
+- **GenerationConfig**: Main configuration dataclass with environment overrides
+- **LLMConfig**: LLM service configuration (model, API endpoints, timeouts)
+- **EmbeddingConfig**: Embedding service configuration (models, batch sizes)
+- **Environment Integration**: Automatic environment variable loading and validation
+
+**Features:**
+- Environment variable overrides for all settings
+- Dataclass-based configuration with type safety
+- Validation and default value handling
+- Development vs production configuration profiles
+
+### 2. Service Layer Architecture ⭐ *Core Enhanced Feature*
+
+The service layer provides clean abstractions for all external dependencies and AI services.
+
+**Core Services:**
+- **LLMService**: Interface to Ollama/CodeLlama with robust error handling
+- **EmbeddingIndexerService**: Advanced semantic indexing using Microsoft CodeBERT
+- **SimpleEmbeddingIndexerService**: Lightweight fallback for constrained environments
+- **KDocService**: Documentation generation service with template system
+
+**Alternative LLM Paths:**
+- **LangChain Provider**: `src/providers/langchain_provider.py` implements `LLMProvider` via LangChain + Ollama.
+- **Lightweight Agent**: `src/services/llm_agent.py` (`CodeLlamaAgent`, `TestGeneratorAgent`) uses direct REST to Ollama with minimal state. Useful for low-dependency local setups.
+
+**Enhanced Features:**
+- Interface-driven design with dependency injection
+- Comprehensive error handling and retry mechanisms
+- Automatic fallback between advanced and simple implementations
+- Structured logging throughout all services
+- Health check capabilities for monitoring
+
+### 3. Core Business Logic ⭐ *Redesigned Architecture*
+
+The core layer contains the main business logic separated from infrastructure concerns.
+
+**Core Components:**
+- **KotlinTestGenerator**: Main orchestrator with enhanced error handling
+- **CodeParser**: Advanced Kotlin code parsing with comment filtering
 - **PromptBuilder**: Context-aware prompt construction with template system
-- **Advanced Class Detection**: Multi-pattern regex system with intelligent prioritization
 
 **Enhanced Workflow:**
 1. **File Discovery**: Recursive scanning with intelligent filtering
 2. **Class Extraction**: Comment-aware parsing with multiple class handling
-3. **Semantic Analysis**: CodeBERT embeddings or simple text matching (fallback)
-4. **Context Building**: Integration of similar test patterns
-5. **AI Generation**: CodeLlama with structured prompts
+3. **Semantic Analysis**: Service-based embedding with automatic fallback
+4. **Context Building**: Integration of similar test patterns via services
+5. **AI Generation**: Service-based LLM interaction with structured prompts
 6. **Quality Assurance**: Validation and feedback loops
 7. **Code Cleaning**: Markdown removal and formatting standardization
 8. **Safe File Operations**: Backup creation and atomic writes
 
-**Enhanced Features:**
-- Semantic similarity matching using existing test cases
-- Intelligent class name extraction (handles data classes vs regular classes)
-- Context-aware generation with similar test examples
-- Clean code output with markdown removal
-- Comprehensive test coverage including edge cases and exceptions
+### 4. Interface and Model System ⭐ *New Architecture*
 
-### 2. KDoc Generation System
+The interface system provides consistent abstractions and data models.
 
-The KDoc generation system processes Kotlin source files and enhances them with comprehensive documentation.
+**Core Interfaces:**
+- **BaseEmbeddingIndexer**: Abstract base for all embedding services
+- **BaseLLMClient**: Abstract base for all LLM integrations
+- **BaseGenerator**: Abstract base for all generation services
 
-**Key Components:**
-- **Kdoc.py**: Individual file processor for targeted documentation
-- **KdocGenerator.py**: Batch processor for entire projects
-- **File Reader**: Processes Kotlin source files
-- **Prompt Builder**: Creates context-aware prompts for documentation
-- **LLM Client**: Interfaces with CodeLlama for generation
-- **File Writer**: Updates original files with KDoc comments
+**Data Models:**
+- **TestGenerationResult**: Structured result objects with metadata
+- **KDocResult**: Documentation generation results with validation
+- **EmbeddingResult**: Semantic similarity results with confidence scores
 
-The test generation system uses semantic analysis and AI to create comprehensive test suites. For visual system architecture, see the flow diagrams in **[DIAGRAMS.md](./DIAGRAMS.md)**.
+### 5. Utility and Infrastructure ⭐ *Enhanced System*
 
-**Key Components:**
-- Class Parser: Extracts class structure and methods
-- Embedding Index: Provides semantic similarity search
-- Semantic Search: Finds relevant existing test cases
-- Prompt Builder: Constructs generation prompts with context
-- LLM Client: Generates and refines test code
-- Test Writer: Creates JUnit 5 test files
+The utility layer provides shared infrastructure and cross-cutting concerns.
 
-## Data Flow Architecture
+**Core Utilities:**
+- **Structured Logging**: Configurable logging with different levels and formats
+- **Error Handling**: Consistent exception handling patterns
+- **File Operations**: Safe file I/O with backup and recovery
+- **Configuration Loading**: Environment-based configuration with validation
+
+### 6. Legacy Compatibility Layer ⭐ *Backward Compatibility*
+
+The legacy layer provides backward compatibility while encouraging migration.
+
+**Legacy Components:**
+- **TestCaseGenerator.py**: Legacy wrapper around new modular system
+- **KdocGenerator.py**: Legacy wrapper for documentation generation
+- **Migration utilities**: Tools to help transition from legacy to modular system
+
+## Data Flow Architecture v2.0
 
 For detailed data flow visualization, see the comprehensive flow diagrams in **[DIAGRAMS.md](./DIAGRAMS.md)**.
+
+### New Modular Data Flow
+
+```
+Input Files → Core Parser → Service Layer → Model Layer → Output Files
+                ↓              ↓              ↓
+        Configuration → Logging System → Error Handling
+                ↓              ↓              ↓
+        Health Checks → Monitoring → Fallback Systems
+```
+
+### Service Integration Flow
+
+1. **Configuration Loading**: Environment-based settings with validation
+2. **Service Initialization**: Dependency injection with health checks
+3. **Core Processing**: Business logic with service abstractions
+4. **Error Handling**: Graceful degradation with fallback mechanisms
+5. **Result Processing**: Structured results with metadata
+6. **Output Generation**: Safe file operations with backup/recovery
 
 **Enhanced Test Generation Flow:**
 ```
@@ -268,7 +388,7 @@ DevTools/
 ├── src/
 │   ├── input-src/          # Input Kotlin files
 │   ├── output-test/        # Generated test files
-│   ├── testcase--datastore/# Existing tests for reference
+│   ├── testcase-datastore/# Existing tests for reference
 │   └── *.py               # Core modules
 ├── cache/
 │   ├── embeddings/        # Cached embeddings
