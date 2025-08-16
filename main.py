@@ -428,7 +428,7 @@ def main():
                 output_dir=args.output_dir,
                 gradle_project_dir='validation-system/gradle-project',
                 coverage_threshold=80.0,
-                max_iterations=3,
+                max_iterations=1,
                 # forward to PipelineConfig.use_langchain via kwargs expansion in run_pipeline
                 use_langchain=args.use_langchain,
             )
