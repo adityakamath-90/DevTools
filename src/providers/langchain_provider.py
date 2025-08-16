@@ -55,8 +55,8 @@ class LangChainOllamaProvider(LLMProvider):
                  top_p: float = 0.9,
                  num_ctx: int = 4096,
                  base_url: str = "http://localhost:11434",
-                 num_gpu: int = 1,
-                 num_thread: int = 20,
+                 num_gpu: int = 0,
+                 num_thread: int = os.cpu_count() or 8,
                  timeout: int = 300,
                  keep_alive: str = "10m"):
         """

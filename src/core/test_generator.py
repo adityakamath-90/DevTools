@@ -239,23 +239,99 @@ class KotlinTestGenerator(TestGenerator):
             # Find similar tests for context
             similar_tests = self._find_similar_tests(kotlin_class)
             self.logger.info(f"Found {len(similar_tests)} similar tests")
+            
+            # Optionally trim similar tests list
+            if self.config.max_similar_tests > 0 and len(similar_tests) > self.config.max_similar_tests:
+                orig_count = len(similar_tests)
+                similar_tests = similar_tests[: self.config.max_similar_tests]
+                self.logger.info(f"Truncated similar tests from {orig_count} to {len(similar_tests)} (max_similar_tests)")
+            
+            # Cap total similar-tests context by characters
+            max_ctx_chars = getattr(self.config, 'max_similar_context_chars', 0) or 0
+            if max_ctx_chars > 0:
+                total = 0
+                capped_tests = []
+                for t in similar_tests:
+                    if total + len(t) > max_ctx_chars:
+                        break
+                    capped_tests.append(t)
+                    total += len(t)
+                if len(capped_tests) != len(similar_tests):
+                    self.logger.info(f"Capped similar-tests context to {total} chars from ~{sum(map(len, similar_tests))} chars")
+                similar_tests = capped_tests
+            
+            # Build the generation prompt with class and similar tests
+            t0 = time.time()
+            prompt = self.prompt_builder.build_generation_prompt(
+                kotlin_class=kotlin_class, 
+                similar_tests=similar_tests
+            )
+            build_ms = (time.time() - t0) * 1000
+            self.logger.info(f"Prompt built in {build_ms:.1f} ms; prompt size: {len(prompt)} chars")
+            
             # Generate test code
-            test_code = self._generate_test_code(kotlin_class, similar_tests)
-            if not test_code:
-                self.logger.error(f"No test code generated for class {kotlin_class.name}. LLM/test output: {test_code}")
+            t1 = time.time()
+            response = self.llm_provider.generate(
+                prompt=prompt,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                top_p=0.95,  # Slightly higher for more creative generation
+                frequency_penalty=0.1,
+                presence_penalty=0.1
+            )
+            gen_s = time.time() - t1
+            self.logger.info(f"LLM generation completed in {gen_s:.2f} s")
+            
+            if not hasattr(response, 'text') or not response.text:
+                self.logger.error("Received empty response from LLM during test generation")
                 return GenerationResult(
                     request_id=request.request_id,
                     status=GenerationStatus.FAILED,
-                    error_message="Failed to generate test code"
+                    error_message="Empty response from LLM"
                 )
-            # Validate and improve test code
-            # improved_test_code = self._validate_and_improve_test(kotlin_class, test_code)
-            # Clean the generated code
-            final_test_code = self._clean_generated_code(test_code or test_code)
-            self.logger.info(f"Final generated test code for {kotlin_class.name}:\n{final_test_code}\n---END---")
-
+            
+            # Extract the generated text from the response
+            generated_code = response.text if hasattr(response, 'text') else str(response)
+            
+            if not generated_code or not generated_code.strip():
+                self.logger.error("Received empty response from LLM during test generation")
+                return GenerationResult(
+                    request_id=request.request_id,
+                    status=GenerationStatus.FAILED,
+                    error_message="Empty response from LLM"
+                )
+            
+            # Clean up the generated code
+            t2 = time.time()
+            cleaned_code = self._clean_generated_code(generated_code)
+            clean_ms = (time.time() - t2) * 1000
+            self.logger.info(f"Post-processing completed in {clean_ms:.1f} ms")
+            
+            if not cleaned_code:
+                self.logger.error("Failed to clean generated test code")
+                return GenerationResult(
+                    request_id=request.request_id,
+                    status=GenerationStatus.FAILED,
+                    error_message="Failed to clean generated test code"
+                )
+                
+            self.logger.info(f"Generated test code for class: {kotlin_class.name}")
+            
+            # If validation is enabled, validate and improve the test code
+            if self.config.enable_validation:
+                improved_code = self._validate_and_improve_test(kotlin_class, cleaned_code)
+                if improved_code:
+                    self.logger.info(f"Successfully improved test code for class: {kotlin_class.name}")
+                    return GenerationResult(
+                        request_id=request.request_id,
+                        status=GenerationStatus.COMPLETED,
+                        test_code=improved_code,
+                        output_file=getattr(request, 'output_file', None),
+                        error_message=None
+                    )
+            
             # Success criteria: non-empty, contains at least one 'class' or '@Test' or 'fun' keyword
-            is_success = bool(final_test_code and ("class " in final_test_code or "@Test" in final_test_code or "fun " in final_test_code))
+            is_success = bool(cleaned_code and ("class " in cleaned_code or "@Test" in cleaned_code or "fun " in cleaned_code))
 
             # Save the test file if generation was successful
             output_file = getattr(request, 'output_file', None)
@@ -264,7 +340,7 @@ class KotlinTestGenerator(TestGenerator):
                 output_file = os.path.join(self.config.output_dir, f"{kotlin_class.name}Test.kt")
             if is_success:
                 try:
-                    saved_path = self._save_test_file(kotlin_class, final_test_code)
+                    saved_path = self._save_test_file(kotlin_class, cleaned_code)
                     output_file = os.path.abspath(saved_path)
                 except Exception as e:
                     self.logger.error(f"Failed to save test file: {e}")
@@ -277,7 +353,7 @@ class KotlinTestGenerator(TestGenerator):
             return GenerationResult(
                 request_id=request.request_id,
                 status=GenerationStatus.COMPLETED if is_success else GenerationStatus.FAILED,
-                test_code=final_test_code,
+                test_code=cleaned_code,
                 output_file=output_file,
                 error_message=None if is_success else "Generated code did not meet success criteria"
             )
@@ -357,14 +433,16 @@ class KotlinTestGenerator(TestGenerator):
         
         try:
             # Build the generation prompt with class and similar tests
+            t0 = time.time()
             prompt = self.prompt_builder.build_generation_prompt(
                 kotlin_class=kotlin_class, 
                 similar_tests=similar_tests
             )
-            
-            self.logger.debug(f"Generated prompt with {len(prompt)} characters")
+            build_ms = (time.time() - t0) * 1000
+            self.logger.info(f"Prompt built in {build_ms:.1f} ms; prompt size: {len(prompt)} chars")
             
             # Generate test code with the LLM
+            t1 = time.time()
             response = self.llm_provider.generate(
                 prompt=prompt,
                 temperature=self.config.temperature,
@@ -373,6 +451,12 @@ class KotlinTestGenerator(TestGenerator):
                 frequency_penalty=0.1,
                 presence_penalty=0.1
             )
+            gen_s = time.time() - t1
+            self.logger.info(f"LLM generation completed in {gen_s:.2f} s")
+            
+            if not hasattr(response, 'text') or not response.text:
+                self.logger.error("Received empty response from LLM during test generation")
+                return ""
             
             # Extract the generated text from the response
             generated_code = response.text if hasattr(response, 'text') else str(response)
@@ -382,7 +466,10 @@ class KotlinTestGenerator(TestGenerator):
                 return ""
             
             # Clean up the generated code
+            t2 = time.time()
             cleaned_code = self._clean_generated_code(generated_code)
+            clean_ms = (time.time() - t2) * 1000
+            self.logger.info(f"Post-processing completed in {clean_ms:.1f} ms")
             
             if not cleaned_code:
                 self.logger.error("Failed to clean generated test code")
@@ -858,7 +945,7 @@ class KotlinTestGenerator(TestGenerator):
             self.logger.error(f"Error in fix_compilation_issues: {str(e)}", exc_info=True)
             return None
             
-    def _analyze_static_coverage(self, kotlin_class: 'KotlinClass', test_code: str) -> dict:
+    def _analyze_static_coverage(self, kotlin_class: KotlinClass, test_code: str) -> dict:
         """
         Analyze test coverage gaps without compilation using static analysis.
         

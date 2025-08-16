@@ -184,16 +184,17 @@ class GenerationConfig:
     enable_auto_fix: bool = False
     enable_coverage_checks: bool = True
     enable_coverage_improvement: bool = True
-    max_similar_tests: int = 2
+    max_similar_tests: int = 1
     similarity_top_k: int = 3  # Number of similar tests to retrieve
     max_source_code_chars: int = 2000
+    max_similar_context_chars: int = 2500
     
     # LLM generation parameters for speed
-    temperature: float = 0.3
-    max_tokens: int = 1000
+    temperature: float = 0.25
+    max_tokens: int = 700
     top_p: float = 0.9
     num_ctx: int = 2048
-    timeout: int = 60  # seconds
+    timeout: int = 45  # seconds
     
     def __post_init__(self):
         """Ensure directories exist."""

@@ -12,8 +12,10 @@ from typing import Optional
 class LangChainOllamaConfig:
     """Configuration for LangChain Ollama provider."""
     
+    model_name: str ="qwen2.5-coder:7b"
+    #model_name: str ="llama3.1:8b-instruct"
     # Model configuration
-    model_name: str = "codellama:instruct"
+    #model_name: str = "codellama:instruct"
     temperature: float = 0.2
     max_tokens: int = 1000
     top_p: float = 0.9

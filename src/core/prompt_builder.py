@@ -72,7 +72,7 @@ class PromptBuilder(IPromptBuilder):
                 similar_tests=context,
                 methods_info=methods_info
             )
-            self.logger.debug(f"Generated prompt length: {len(prompt)} characters")
+            self.logger.info(f"Generated prompt length: {len(prompt)} characters")
             return prompt
         except Exception as e:
             self.logger.error(f"Error building generation prompt: {e}")
