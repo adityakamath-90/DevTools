@@ -13,7 +13,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from interfaces.base_interfaces import LLMProvider
-from config.settings import LLMConfig
+from src.config.settings import LLMConfig
 from utils.logging import get_logger
 from .llm_service import LLMService
 

@@ -58,7 +58,7 @@ class LLMService(LLMProvider):
             config: LLM configuration
             langchain_config: LangChain-specific configuration
         """
-        from config.settings import config as app_config
+        from src.config.settings import config as app_config
         
         self.config = config or LLMConfig()
         self.langchain_config = langchain_config or getattr(app_config, 'langchain', default_langchain_config)
@@ -79,7 +79,7 @@ class LLMService(LLMProvider):
         Returns:
             An instance of a class implementing the LLMProvider interface
         """
-        from config.settings import config as app_config
+        from src.config.settings import config as app_config
         from src.providers import LANGCHAIN_AVAILABLE, get_available_providers
         
         # Check if we should use LangChain provider
@@ -124,7 +124,8 @@ class LLMService(LLMProvider):
                     base_url=ollama_config.base_url,
                     num_gpu=ollama_config.num_gpu,
                     num_thread=ollama_config.num_thread,
-                    timeout=ollama_config.timeout
+                    timeout=ollama_config.timeout,
+                    keep_alive=getattr(ollama_config, 'keep_alive', '10m')
                 )
             
             # Fall back to default provider
@@ -328,7 +329,7 @@ class LLMClient:
         self.logger.warning("Using deprecated LLMClient. Consider updating to LLMService.")
         
         # Create config from legacy parameters
-        from config.settings import LLMConfig
+        from src.config.settings import LLMConfig
         config = LLMConfig(
             api_url=api_url,
             model_name=model_name

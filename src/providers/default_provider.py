@@ -13,7 +13,7 @@ from typing import Dict, Any, Optional
 
 from interfaces.base_interfaces import LLMProvider
 from models.data_models import ModelMetrics
-from config.settings import LLMConfig
+from src.config.settings import LLMConfig
 from utils.logging import get_logger
 
 logger = get_logger(__name__)

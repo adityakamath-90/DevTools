@@ -90,33 +90,38 @@ class EmbeddingIndexerService(SimilarityIndexer):
         try:
             self.logger.info(f"Loading embedding model: {self.config.model_name}")
 
-            # First try to load from local cache only
+            # Optionally set offline-related environment variables based on config
+            self._validate_offline_mode()
+
+            # Decide local-only load based on offline_mode
+            local_only = bool(getattr(self.config, "offline_mode", True))
+
+            # First try to load from local cache only (when offline or preferred)
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(
-                    self.config.model_name, 
-                    local_files_only=True,
-                    offline=True
+                    self.config.model_name,
+                    local_files_only=local_only,
                 )
                 self.model = AutoModel.from_pretrained(
-                    self.config.model_name, 
-                    local_files_only=True,
-                    offline=True
+                    self.config.model_name,
+                    local_files_only=local_only,
                 )
-                self.logger.info("Successfully loaded embedding model from local cache")
+                src = "local cache" if local_only else "auto"
+                self.logger.info(f"Successfully loaded embedding model from {src}")
             except Exception as local_error:
-                self.logger.warning(f"Failed to load model from local cache: {local_error}")
-                self.logger.info("Attempting to download model (this will require internet connection)")
-                
-                # Only download if specifically allowed
-                if os.getenv("ALLOW_MODEL_DOWNLOAD", "false").lower() not in ("true", "1", "yes"):
+                self.logger.warning(f"Failed to load model with local_only={local_only}: {local_error}")
+
+                # Only download if specifically allowed via centralized config
+                if not bool(getattr(self.config, "allow_model_download", False)):
                     raise ImportError(
-                        f"Model '{self.config.model_name}' not found locally and downloads are disabled. "
-                        f"Please download the model first or set ALLOW_MODEL_DOWNLOAD=true"
+                        f"Model '{self.config.model_name}' not found locally and downloads are disabled by EmbeddingConfig.allow_model_download."
                     )
-                
-                # Download model (requires internet)
-                self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name)
-                self.model = AutoModel.from_pretrained(self.config.model_name)
+
+                self.logger.info("Attempting to download model (internet required) as allow_model_download=True")
+
+                # Download model (requires internet); ensure not forcing offline
+                self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, local_files_only=False)
+                self.model = AutoModel.from_pretrained(self.config.model_name, local_files_only=False)
                 self.logger.info("Successfully downloaded and loaded embedding model")
 
             # Set model to evaluation mode
@@ -127,18 +132,20 @@ class EmbeddingIndexerService(SimilarityIndexer):
             raise
     
     def _validate_offline_mode(self) -> None:
-        """Validate that the system is configured for offline operation."""
-        # Check if downloads are explicitly disabled
-        allow_download = os.getenv("ALLOW_MODEL_DOWNLOAD", "false").lower()
-        if allow_download in ("true", "1", "yes"):
-            self.logger.warning("Model downloads are enabled - system may access internet")
-        
-        # Set offline environment variables
-        os.environ['TRANSFORMERS_OFFLINE'] = 'true'
-        os.environ['HF_DATASETS_OFFLINE'] = 'true'
-        os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-        
-        self.logger.info("Offline mode validation complete")
+        """Apply offline mode env settings based on centralized config flags."""
+        try:
+            if bool(getattr(self.config, "set_env_offline", True)):
+                os.environ['TRANSFORMERS_OFFLINE'] = 'true' if bool(getattr(self.config, "offline_mode", True)) else 'false'
+                os.environ['HF_DATASETS_OFFLINE'] = 'true' if bool(getattr(self.config, "offline_mode", True)) else 'false'
+                os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+                self.logger.info("Applied offline environment settings from EmbeddingConfig")
+            else:
+                self.logger.debug("set_env_offline=False; not modifying offline-related environment variables")
+
+            if bool(getattr(self.config, "allow_model_download", False)):
+                self.logger.warning("allow_model_download=True - system may access internet to fetch models")
+        except Exception as e:
+            self.logger.warning(f"Failed to adjust offline environment settings: {e}")
     
     def _load_and_index(self) -> IndexingResult:
         """Load test cases and build the search index."""
@@ -291,41 +298,8 @@ class EmbeddingIndexerService(SimilarityIndexer):
                 if len(results) >= top_k:
                     break
             
-            # If no close matches found, use LLM to generate test cases
-            if not results and self.test_cases:  # Only use LLM if we have some test cases for context
-                try:
-                    from src.services.llm_service import LLMService
-                    from src.config.settings import LLMConfig
-                    
-                    self.logger.info("No close matches found, generating test cases with LLM")
-                    
-                    # Initialize LLM service with default config
-                    llm_service = LLMService(LLMConfig())
-                    
-                    # Prepare prompt for test case generation
-                    prompt = f"""
-                    Generate {top_k} unit test cases for the following code. 
-                    The tests should be in Kotlin and follow the same style as the example tests below.
-                    
-                    Example tests:
-                    {self.test_cases[:2]}
-                    
-                    Code to test:
-                    {query}
-                    
-                    Generate {top_k} test cases that would effectively test this code.
-                    """
-                    
-                    # Generate test cases
-                    response = llm_service.generate(prompt)
-                    if response.success and response.text:
-                        # Add generated test cases to index
-                        generated_test = response.text
-                        self.add_test_case(generated_test, "generated_test.kt")
-                        results = [(1.0, generated_test)]  # High confidence in LLM-generated tests
-                        
-                except Exception as e:
-                    self.logger.error(f"Error generating test cases with LLM: {e}")
+            # If no close matches found, skip LLM fallback to avoid extra provider init and latency
+            # The generator will proceed without similar tests.
             
             # If we still have no results, return the most similar regardless of threshold
             if not results and indices.size > 0:

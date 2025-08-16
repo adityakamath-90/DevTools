@@ -233,6 +233,10 @@ class EmbeddingConfig:
     test_cases_dir: str = "src/testcase-datastore" 
     max_length: int = 512
     batch_size: int = 8
+    # Centralized flags
+    allow_model_download: bool = False
+    offline_mode: bool = True
+    set_env_offline: bool = True
     
     def __post_init__(self):
         """Load from environment variables."""
@@ -242,3 +246,10 @@ class EmbeddingConfig:
             self.batch_size = int(batch_size)
         if max_length := os.getenv("EMBEDDING_MAX_LENGTH"):
             self.max_length = int(max_length)
+        # Flags
+        if allow_dl := os.getenv("ALLOW_MODEL_DOWNLOAD"):
+            self.allow_model_download = allow_dl.lower() in ("true", "1", "yes")
+        if offline := os.getenv("OFFLINE_MODE"):
+            self.offline_mode = offline.lower() in ("true", "1", "yes")
+        if set_env := os.getenv("SET_ENV_OFFLINE"):
+            self.set_env_offline = set_env.lower() in ("true", "1", "yes")

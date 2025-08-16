@@ -5,16 +5,17 @@ import json
 import logging
 from pathlib import Path
 from core.prompt_builder import build_generation_prompt
+from src.config.settings import config as app_config
 
 logger = logging.getLogger(__name__)
 
 @dataclass
 class CodeLlamaConfig:
-    base_url: str = "http://localhost:11434"
-    model: str = "codellama:7b"
-    temperature: float = 0.2
-    max_tokens: int = 4096
-    top_p: float = 0.9
+    base_url: str = app_config.langchain.ollama.base_url
+    model: str = app_config.model.llm_model_name or app_config.langchain.ollama.model_name
+    temperature: float = app_config.model.llm_temperature or app_config.langchain.ollama.temperature
+    max_tokens: int = app_config.langchain.ollama.max_tokens
+    top_p: float = app_config.model.llm_top_p or app_config.langchain.ollama.top_p
 
 class CodeLlamaAgent:
     def __init__(self, config: Optional[CodeLlamaConfig] = None):
@@ -103,6 +104,6 @@ class TestGeneratorAgent:
 
 def create_test_generator_agent() -> TestGeneratorAgent:
     """Factory function to create a test generator agent."""
-    config = CodeLlamaConfig()
-    llm_agent = CodeLlamaAgent(config)
+    cfg = CodeLlamaConfig()
+    llm_agent = CodeLlamaAgent(cfg)
     return TestGeneratorAgent(llm_agent)

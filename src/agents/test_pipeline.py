@@ -22,8 +22,10 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
-from config.settings import GenerationConfig, EmbeddingConfig
+from src.config.settings import GenerationConfig, EmbeddingConfig
 from utils.logging import get_logger
 from services.llm_agent import create_test_generator_agent
 from services.embedding_service import EmbeddingIndexerService, SimpleEmbeddingIndexerService
@@ -90,6 +92,15 @@ class TestGenerationAgent:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.reference_tests_dir = Path(reference_tests_dir)
         self.logger = get_logger(self.__class__.__name__)
+        # Reasonable default parallelism; avoid oversubscription
+        try:
+            import os
+            cpu = os.cpu_count() or 2
+        except Exception:
+            cpu = 2
+        self.max_workers = max(2, min(4, cpu))
+        # Guard for non-thread-safe providers if needed
+        self._llm_lock = threading.Lock()
 
         # Prefer advanced embedding indexer (CodeBERT + FAISS), fallback to simple
         try:
@@ -133,12 +144,13 @@ class TestGenerationAgent:
 
     def generate_for_sources(self, items: List[Tuple[Path, str]]) -> List[Path]:
         generated: List[Path] = []
-        for file_path, source_code in items:
+
+        def _generate_one(file_path: Path, source_code: str) -> Optional[Path]:
             try:
                 class_name = self._class_name_from_source(source_code, default=file_path.stem)
                 test_class_name = f"{class_name}Test"
+                # Core generator path
                 if self.use_core_generator and self.core_generator is not None:
-                    # Use the robust core generator; it will save to output_dir itself
                     from models.data_models import GenerationRequest  # local import to avoid import cycles
                     req = GenerationRequest(
                         request_id=f"req::{file_path.stem}",
@@ -147,30 +159,38 @@ class TestGenerationAgent:
                         parameters=None,
                     )
                     setattr(req, 'output_file', str(self.output_dir / f"{test_class_name}.kt"))
-                    result = self.core_generator.generate_tests(req)
+                    # Some providers may not be thread-safe; serialize LLM call if needed
+                    with self._llm_lock:
+                        result = self.core_generator.generate_tests(req)
                     if getattr(result, 'output_file', None):
-                        generated.append(Path(result.output_file))
                         self.logger.info(f"Generated test (core): {result.output_file}")
+                        return Path(result.output_file)
                     else:
                         self.logger.warning(f"Core generator produced no output for {file_path.name}")
+                        return None
                 else:
-                    # Fallback to simple agent
+                    # Fallback simple agent path (kept sequential-like due to agent internals)
                     similar = []
                     try:
                         similar = self.sim_index.find_similar(source_code, top_k=3)
                     except Exception as e:
                         self.logger.warning(f"Similarity lookup failed for {file_path.name}: {e}")
 
-                    test_code = self.generator.generate_test(
-                        code=source_code,
-                        test_class_name=test_class_name,
-                        similar_tests=similar or None,
-                    )
+                    # Serialize LLM call to be safe
+                    with self._llm_lock:
+                        test_code = self.generator.generate_test(
+                            code=source_code,
+                            test_class_name=test_class_name,
+                            similar_tests=similar or None,
+                        )
 
                     # Extract code blocks if present
-                    blocks = self.generator.llm_agent.extract_code_blocks(test_code)
-                    if blocks:
-                        test_code = "\n\n".join(cb.strip() for cb in blocks)
+                    try:
+                        blocks = self.generator.llm_agent.extract_code_blocks(test_code)
+                        if blocks:
+                            test_code = "\n\n".join(cb.strip() for cb in blocks)
+                    except Exception:
+                        pass
 
                     # Basic success heuristic
                     if not any(tok in test_code for tok in ("@Test", "class ", "fun ")):
@@ -179,10 +199,20 @@ class TestGenerationAgent:
                     out_name = f"{test_class_name}.kt"
                     out_path = self.output_dir / out_name
                     out_path.write_text(test_code, encoding="utf-8")
-                    generated.append(out_path)
                     self.logger.info(f"Generated test: {out_path}")
+                    return out_path
             except Exception as e:
                 self.logger.error(f"Generation failed for {file_path}: {e}")
+                return None
+
+        # Run in a small thread pool
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = [executor.submit(_generate_one, fp, sc) for fp, sc in items]
+            for fut in as_completed(futures):
+                p = fut.result()
+                if p is not None:
+                    generated.append(p)
+
         return generated
 
 
@@ -341,7 +371,7 @@ class PipelineConfig:
     output_dir: str = "output-test"
     gradle_project_dir: str = "validation-system/gradle-project"
     coverage_threshold: float = 80.0
-    max_iterations: int = 1
+    max_iterations: int = 2
     use_langchain: bool = True  
 
 

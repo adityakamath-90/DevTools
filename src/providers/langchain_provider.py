@@ -56,8 +56,9 @@ class LangChainOllamaProvider(LLMProvider):
                  num_ctx: int = 4096,
                  base_url: str = "http://localhost:11434",
                  num_gpu: int = 1,
-                 num_thread: int = 4,
-                 timeout: int = 300):
+                 num_thread: int = 20,
+                 timeout: int = 300,
+                 keep_alive: str = "10m"):
         """
         Initialize the LangChain Ollama provider.
         
@@ -87,6 +88,7 @@ class LangChainOllamaProvider(LLMProvider):
         self.num_gpu = max(0, num_gpu)  # Ensure non-negative
         self.num_thread = max(1, num_thread)  # Ensure at least 1
         self.timeout = max(1, timeout)  # Ensure at least 1 second
+        self.keep_alive = keep_alive
         
         # Initialize the LangChain LLM
         self._initialize_llm()
@@ -123,7 +125,8 @@ class LangChainOllamaProvider(LLMProvider):
                 num_ctx=self.num_ctx,
                 num_gpu=self.num_gpu,
                 num_thread=self.num_thread,
-                timeout=self.timeout
+                timeout=self.timeout,
+                keep_alive=self.keep_alive,
             )
             
             # Verify the model is available by making a test call
@@ -193,6 +196,7 @@ class LangChainOllamaProvider(LLMProvider):
                 'max_tokens': self.max_tokens,
                 'top_p': self.top_p,
                 'num_ctx': self.num_ctx,
+                'timeout': kwargs.get('timeout', self.timeout),
                 **kwargs  # Allow overrides from kwargs
             }
             
