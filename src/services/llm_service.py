@@ -6,6 +6,8 @@ multiple LLM backends, including local models via LangChain/Ollama.
 """
 
 import time
+import os
+import platform
 import requests
 from typing import Dict, Any, Optional, Union, Type, TypeVar
 from dataclasses import dataclass
@@ -71,7 +73,18 @@ class LLMService(LLMProvider):
         self.metrics = ModelMetrics(model_name=self.config.model_name)
         
         self.logger.info(f"Initialized LLMService with provider: {type(self.provider).__name__}")
-    
+        
+        # Optional warm-up to avoid cold-start latency (for Ollama LangChain provider)
+        try:
+            ollama_cfg = getattr(self.langchain_config, 'ollama', None)
+            if ollama_cfg and getattr(ollama_cfg, 'warmup_on_start', False):
+                prompt = getattr(ollama_cfg, 'warmup_prompt', 'ping')
+                max_toks = int(getattr(ollama_cfg, 'warmup_max_tokens', 1))
+                self.logger.info("Warming up LLM provider with a tiny request…")
+                _ = self.generate(prompt, max_tokens=max_toks, temperature=0.0, top_p=0.0)
+        except Exception as e:
+            self.logger.warning(f"LLM warm-up skipped due to error: {e}")
+
     def _initialize_provider(self) -> LLMProvider:
         """
         Initialize the appropriate LLM provider based on configuration.
@@ -114,6 +127,23 @@ class LLMService(LLMProvider):
                 # Get Ollama configuration
                 ollama_config = self.langchain_config.ollama
                 
+                # Auto-tune for Apple Silicon if enabled
+                tuned_num_thread = getattr(ollama_config, 'num_thread', os.cpu_count() or 8)
+                tuned_num_gpu = getattr(ollama_config, 'num_gpu', 0)
+                auto_tune = getattr(ollama_config, 'auto_tune_hardware', False)
+                try:
+                    if auto_tune and platform.system() == 'Darwin' and platform.machine() in ('arm64', 'aarch64'):
+                        # Use all logical cores for threads
+                        tuned_num_thread = os.cpu_count() or tuned_num_thread or 8
+                        # Enable GPU offload via Metal by ensuring at least 1 GPU layer
+                        if tuned_num_gpu == 0:
+                            tuned_num_gpu = 1
+                        self.logger.info(
+                            f"Apple Silicon detected; auto-tuned num_thread={tuned_num_thread}, num_gpu={tuned_num_gpu}"
+                        )
+                except Exception as e:
+                    self.logger.debug(f"Hardware auto-tune skipped: {e}")
+                
                 # Create provider with configuration from settings
                 return LangChainOllamaProvider(
                     model_name=ollama_config.model_name,
@@ -122,10 +152,11 @@ class LLMService(LLMProvider):
                     top_p=ollama_config.top_p,
                     num_ctx=ollama_config.num_ctx,
                     base_url=ollama_config.base_url,
-                    num_gpu=ollama_config.num_gpu,
-                    num_thread=ollama_config.num_thread,
+                    num_gpu=tuned_num_gpu,
+                    num_thread=tuned_num_thread,
                     timeout=ollama_config.timeout,
-                    keep_alive=getattr(ollama_config, 'keep_alive', '10m')
+                    keep_alive=getattr(ollama_config, 'keep_alive', '10m'),
+                    enable_streaming_callbacks=getattr(ollama_config, 'enable_streaming_callbacks', False)
                 )
             
             # Fall back to default provider

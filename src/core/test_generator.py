@@ -235,7 +235,19 @@ class KotlinTestGenerator(TestGenerator):
                 name=request.class_name,
                 source_code=request.source_code
             )
+            # Truncate source code if too large to reduce prompt size
+            try:
+                max_src = getattr(self.config, 'max_source_code_chars', 0) or 0
+                if max_src > 0 and kotlin_class.source_code and len(kotlin_class.source_code) > max_src:
+                    original_len = len(kotlin_class.source_code)
+                    kotlin_class.source_code = kotlin_class.source_code[:max_src]
+                    self.logger.info(
+                        f"Truncated source code from {original_len} to {len(kotlin_class.source_code)} chars (max_source_code_chars)"
+                    )
+            except Exception as e:
+                self.logger.warning(f"Failed to apply source truncation: {e}")
             self.logger.info(f"Successfully parsed class: {kotlin_class.name}")
+            self.logger.info(f"Source code length: {len(kotlin_class.source_code)}")
             # Find similar tests for context
             similar_tests = self._find_similar_tests(kotlin_class)
             self.logger.info(f"Found {len(similar_tests)} similar tests")
@@ -322,11 +334,22 @@ class KotlinTestGenerator(TestGenerator):
                 improved_code = self._validate_and_improve_test(kotlin_class, cleaned_code)
                 if improved_code:
                     self.logger.info(f"Successfully improved test code for class: {kotlin_class.name}")
+                    # Ensure we persist improved code to disk before returning
+                    output_file = getattr(request, 'output_file', None)
+                    if not output_file:
+                        output_file = os.path.join(self.config.output_dir, f"{kotlin_class.name}Test.kt")
+                    try:
+                        saved_path = self._save_test_file(kotlin_class, improved_code)
+                        output_file = os.path.abspath(saved_path)
+                    except Exception as e:
+                        self.logger.error(f"Failed to save improved test file: {e}")
+                        # Fall back to returning without an output file path
+                        output_file = None
                     return GenerationResult(
                         request_id=request.request_id,
                         status=GenerationStatus.COMPLETED,
                         test_code=improved_code,
-                        output_file=getattr(request, 'output_file', None),
+                        output_file=output_file,
                         error_message=None
                     )
             

@@ -17,18 +17,29 @@ class LangChainOllamaConfig:
     # Model configuration
     #model_name: str = "codellama:instruct"
     temperature: float = 0.2
-    max_tokens: int = 1000
+    max_tokens: int = 500
     top_p: float = 0.9
-    num_ctx: int = 4096
+    num_ctx: int = 2048
     
     # Server configuration
     base_url: str = "http://localhost:11434"
     
     # Advanced settings
-    num_gpu: int = 1  # Set to 0 for CPU-only
+    num_gpu: int = 1  # Set to 0 for CPU-only; provider may auto-tune on Apple Silicon
     num_thread: int = 8
     timeout: int = 120  # seconds
     keep_alive: str = "10m"  # Keep the model loaded in Ollama
+    
+    # Warm-up settings (optional)
+    warmup_on_start: bool = True
+    warmup_prompt: str = "ping"
+    warmup_max_tokens: int = 1
+    
+    # Hardware auto-tuning (optional)
+    auto_tune_hardware: bool = True
+    
+    # Streaming callbacks (disable per-token printing to reduce overhead)
+    enable_streaming_callbacks: bool = False
     
     def to_dict(self) -> dict:
         """Convert configuration to dictionary."""
@@ -43,6 +54,11 @@ class LangChainOllamaConfig:
             "num_thread": self.num_thread,
             "timeout": self.timeout,
             "keep_alive": self.keep_alive,
+            "warmup_on_start": self.warmup_on_start,
+            "warmup_prompt": self.warmup_prompt,
+            "warmup_max_tokens": self.warmup_max_tokens,
+            "auto_tune_hardware": self.auto_tune_hardware,
+            "enable_streaming_callbacks": self.enable_streaming_callbacks,
         }
 
 @dataclass

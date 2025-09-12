@@ -89,7 +89,7 @@ install_ollama() {
     
     # Pull CodeLlama model (using Ollama)
     echo "🔍 Downloading CodeLlama model (this may take several minutes)..."
-    if ! ollama pull codellama:instruct; then
+    if ! ollama pull qwen2.5-coder:7b; then
         echo "❌ Failed to download CodeLlama model"
         echo "💡 Please ensure Ollama is properly installed and you have an internet connection"
         exit 1

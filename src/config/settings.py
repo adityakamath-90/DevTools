@@ -85,22 +85,23 @@ class Config:
     def _load_from_environment(self) -> None:
         """Load configuration from environment variables."""
         
-        # LLM Configuration
-        if os.getenv("OLLAMA_API_URL"):
-            self.model.ollama_api_url = os.getenv("OLLAMA_API_URL")
-        if os.getenv("LLM_MODEL_NAME"):
-            self.model.llm_model_name = os.getenv("LLM_MODEL_NAME")
-        if os.getenv("LLM_TEMPERATURE"):
-            self.model.llm_temperature = float(os.getenv("LLM_TEMPERATURE"))
-        if os.getenv("LLM_TOP_P"):
-            self.model.llm_top_p = float(os.getenv("LLM_TOP_P"))
-            
         # LangChain Configuration
         if os.getenv("USE_LANGCHAIN") is not None:
             self.model.use_langchain = os.getenv("USE_LANGCHAIN").lower() in ("true", "1", "t")
         if os.getenv("LANGCHAIN_PROVIDER"):
             self.model.langchain_provider = os.getenv("LANGCHAIN_PROVIDER")
-            
+        
+        # If NOT using LangChain, honor legacy direct LLM env vars; otherwise, ignore them to prevent conflicts
+        if not self.model.use_langchain:
+            if os.getenv("OLLAMA_API_URL"):
+                self.model.ollama_api_url = os.getenv("OLLAMA_API_URL")
+            if os.getenv("LLM_MODEL_NAME"):
+                self.model.llm_model_name = os.getenv("LLM_MODEL_NAME")
+            if os.getenv("LLM_TEMPERATURE"):
+                self.model.llm_temperature = float(os.getenv("LLM_TEMPERATURE"))
+            if os.getenv("LLM_TOP_P"):
+                self.model.llm_top_p = float(os.getenv("LLM_TOP_P"))
+        
         # Update LangChain config from environment
         if os.getenv("LANGCHAIN_MODEL_NAME"):
             self.langchain.ollama.model_name = os.getenv("LANGCHAIN_MODEL_NAME")
@@ -112,6 +113,26 @@ class Config:
             self.langchain.ollama.top_p = float(os.getenv("LANGCHAIN_TOP_P"))
         if os.getenv("LANGCHAIN_BASE_URL"):
             self.langchain.ollama.base_url = os.getenv("LANGCHAIN_BASE_URL")
+        if os.getenv("LANGCHAIN_NUM_CTX"):
+            self.langchain.ollama.num_ctx = int(os.getenv("LANGCHAIN_NUM_CTX"))
+        if os.getenv("LANGCHAIN_NUM_GPU"):
+            self.langchain.ollama.num_gpu = int(os.getenv("LANGCHAIN_NUM_GPU"))
+        if os.getenv("LANGCHAIN_NUM_THREAD"):
+            self.langchain.ollama.num_thread = int(os.getenv("LANGCHAIN_NUM_THREAD"))
+        if os.getenv("LANGCHAIN_TIMEOUT"):
+            self.langchain.ollama.timeout = int(os.getenv("LANGCHAIN_TIMEOUT"))
+        if os.getenv("LANGCHAIN_KEEP_ALIVE"):
+            self.langchain.ollama.keep_alive = os.getenv("LANGCHAIN_KEEP_ALIVE")
+        if os.getenv("LANGCHAIN_ENABLE_STREAMING_CALLBACKS"):
+            self.langchain.ollama.enable_streaming_callbacks = os.getenv("LANGCHAIN_ENABLE_STREAMING_CALLBACKS").lower() in ("true", "1", "t")
+        if os.getenv("LANGCHAIN_WARMUP_ON_START"):
+            self.langchain.ollama.warmup_on_start = os.getenv("LANGCHAIN_WARMUP_ON_START").lower() in ("true", "1", "t")
+        if os.getenv("LANGCHAIN_WARMUP_MAX_TOKENS"):
+            self.langchain.ollama.warmup_max_tokens = int(os.getenv("LANGCHAIN_WARMUP_MAX_TOKENS"))
+        if os.getenv("LANGCHAIN_WARMUP_PROMPT"):
+            self.langchain.ollama.warmup_prompt = os.getenv("LANGCHAIN_WARMUP_PROMPT")
+        if os.getenv("LANGCHAIN_AUTO_TUNE_HARDWARE"):
+            self.langchain.ollama.auto_tune_hardware = os.getenv("LANGCHAIN_AUTO_TUNE_HARDWARE").lower() in ("true", "1", "t")
         
         # Temperature and other model parameters
         if temp := os.getenv("LLM_TEMPERATURE"):
@@ -191,18 +212,77 @@ class GenerationConfig:
     
     # LLM generation parameters for speed
     temperature: float = 0.25
-    max_tokens: int = 700
+    max_tokens: int = 500
     top_p: float = 0.9
     num_ctx: int = 2048
     timeout: int = 45  # seconds
     
     def __post_init__(self):
-        """Ensure directories exist."""
+        """Ensure directories exist and load optional overrides from environment."""
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         Path(self.existing_tests_dir).mkdir(parents=True, exist_ok=True)
+        
+        # Optional env overrides for prompt truncation and retrieval
+        if v := os.getenv("MAX_SOURCE_CODE_CHARS"):
+            try:
+                self.max_source_code_chars = int(v)
+            except ValueError:
+                pass
+        if v := os.getenv("MAX_SIMILAR_CONTEXT_CHARS"):
+            try:
+                self.max_similar_context_chars = int(v)
+            except ValueError:
+                pass
+        if v := os.getenv("MAX_SIMILAR_TESTS"):
+            try:
+                self.max_similar_tests = int(v)
+            except ValueError:
+                pass
+        if v := os.getenv("SIMILARITY_TOP_K"):
+            try:
+                self.similarity_top_k = int(v)
+            except ValueError:
+                pass
+        
+        # Optional env overrides for generation behavior
+        if v := os.getenv("GEN_TEMPERATURE"):
+            try:
+                self.temperature = float(v)
+            except ValueError:
+                pass
+        if v := os.getenv("GEN_MAX_TOKENS"):
+            try:
+                self.max_tokens = int(v)
+            except ValueError:
+                pass
+        if v := os.getenv("GEN_TOP_P"):
+            try:
+                self.top_p = float(v)
+            except ValueError:
+                pass
+        if v := os.getenv("GEN_NUM_CTX"):
+            try:
+                self.num_ctx = int(v)
+            except ValueError:
+                pass
+        if v := os.getenv("GEN_TIMEOUT"):
+            try:
+                self.timeout = int(v)
+            except ValueError:
+                pass
+        
+        # Optional toggles
+        if v := os.getenv("ENABLE_VALIDATION"):
+            self.enable_validation = v.lower() in ("true", "1", "t", "yes")
+        if v := os.getenv("ENABLE_STATIC_ANALYSIS"):
+            self.enable_static_analysis = v.lower() in ("true", "1", "t", "yes")
+        if v := os.getenv("ENABLE_COVERAGE_CHECKS"):
+            self.enable_coverage_checks = v.lower() in ("true", "1", "t", "yes")
+        if v := os.getenv("ENABLE_COVERAGE_IMPROVEMENT"):
+            self.enable_coverage_improvement = v.lower() in ("true", "1", "t", "yes")
 
 
-@dataclass  
+@dataclass
 class LLMConfig:
     """Configuration for LLM service."""
     
@@ -231,7 +311,7 @@ class EmbeddingConfig:
     """Configuration for embedding service."""
     
     model_name: str = "microsoft/codebert-base"
-    test_cases_dir: str = "src/testcase-datastore" 
+    test_cases_dir: str = "testcase-datastore" 
     max_length: int = 512
     batch_size: int = 8
     # Centralized flags

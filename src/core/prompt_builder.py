@@ -63,6 +63,15 @@ class PromptBuilder(IPromptBuilder):
         """
         self.logger.info(f"Building generation prompt for class: {kotlin_class.name}")
         try:
+            # Log input component sizes for diagnostics
+            try:
+                class_len = len(kotlin_class.source_code or "")
+                sim_ctx_len = sum(len(s) for s in (similar_tests or []))
+                self.logger.info(
+                    f"Prompt components -> class_code={class_len} chars, similar_ctx={sim_ctx_len} chars, similar_count={len(similar_tests or [])}"
+                )
+            except Exception:
+                pass
             context = self._build_context_string(similar_tests)
             methods_info = self._build_methods_info(kotlin_class)
             template = self._templates['generation']
